@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（完全動作スタンドアロン）</title>
+    <title>川渡りパズル 究極版（自動降車・ギリギリクリア対応）</title>
     <style>
         :root {
             --grass-color: #4caf50;
@@ -64,6 +64,7 @@
         }
 
         button:active { transform: translateY(2px); box-shadow: none; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         #undo-btn { background: #ff9800; color: white; border: none; }
         #reset-btn { background: #607d8b; color: white; border: none; }
 
@@ -96,7 +97,7 @@
             color: #ff5252;
         }
 
-        /* ゲームエリア（左岸・川・右岸） */
+        /* ゲームエリア */
         #game-area {
             flex: 1;
             display: flex;
@@ -163,13 +164,13 @@
             flex-direction: column;
             justify-content: space-evenly;
             align-items: center;
-            transition: left 0.8s ease-in-out;
+            transition: left 0.8s ease-in-out, transform 0.5s ease, filter 0.5s ease;
             cursor: pointer;
             z-index: 3;
         }
 
         #boat.right-side { left: calc(95% - 100px); }
-        #boat.broken { filter: grayscale(100%) opacity(0.7); transform: rotate(15deg) translateY(20px); }
+        #boat.broken { filter: grayscale(80%) brightness(0.6); transform: rotate(15deg) translateY(30px); }
 
         .boat-slot {
             width: 75px;
@@ -182,7 +183,7 @@
             background: rgba(0,0,0,0.1);
         }
 
-        /* キャラクターアイコン（画像依存を完全に排除し、リッチなCSS絵文字メダルに変更） */
+        /* キャラクターアイコン */
         .character {
             width: 70px;
             height: 70px;
@@ -271,16 +272,13 @@
     </div>
 
     <div id="message-area">
-        アイコンをタップして船に乗せよう。<br>船をタップすると耐久値を1消費して向こう岸へ移動します。
+        アイコンをタップして船に乗せよう。<br>船をタップすると耐久値を消費して向こう岸へ移動します。
     </div>
 
 <script>
-    // -----------------------------------------------------
-    // ステージデータ定義（画像を排除し、確実な絵文字アイコンに）
-    // -----------------------------------------------------
     const stages = {
         classic: {
-            maxMoves: 7, // 最短7手
+            maxMoves: 7,
             turnLimit: false,
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間', icon: '👦', canDrive: true },
@@ -290,7 +288,7 @@
             ]
         },
         twins: {
-            maxMoves: 9, // 最短9手
+            maxMoves: 9,
             turnLimit: false,
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
@@ -302,7 +300,7 @@
             ]
         },
         werewolf: {
-            maxMoves: 7, // 最短7手
+            maxMoves: 7,
             turnLimit: true,
             nightTurns: [4, 5],
             entities: [
@@ -314,14 +312,12 @@
         }
     };
 
-    // -----------------------------------------------------
-    // 状態管理
-    // -----------------------------------------------------
     let currentStage = 'classic';
     let entities = [];
-    let state = []; // 履歴用 (UNDO)
+    let state = []; 
     let currentState = {};
     let isGameOver = false;
+    let isMoving = false; // アニメーション中の連続クリック防止
 
     const leftBankEl = document.getElementById('left-bank');
     const rightBankEl = document.getElementById('right-bank');
@@ -330,10 +326,8 @@
     const messageEl = document.getElementById('message-area');
     const statusBarEl = document.getElementById('status-bar');
     const durabilityEl = document.getElementById('durability-value');
+    const undoBtn = document.getElementById('undo-btn');
 
-    // -----------------------------------------------------
-    // 初期化と描画
-    // -----------------------------------------------------
     function initGame() {
         const stageData = stages[currentStage];
         entities = JSON.parse(JSON.stringify(stageData.entities));
@@ -347,11 +341,13 @@
         entities.forEach(e => { currentState.positions[e.id] = 'left'; });
         state = [JSON.parse(JSON.stringify(currentState))];
         isGameOver = false;
+        isMoving = false;
         
-        boatEl.className = ''; 
+        boatEl.classList.remove('right-side', 'broken');
         document.body.className = '';
-        messageEl.innerHTML = 'アイコンをタップして船に乗せよう。<br>最短手数でないとイカダが壊れます！';
+        messageEl.innerHTML = 'アイコンをタップして船に乗せよう。<br>移動後、キャラクターは自動的に岸に降ります。';
         messageEl.className = '';
+        undoBtn.disabled = false;
         
         render();
     }
@@ -373,7 +369,6 @@
             statusBarEl.innerHTML = `ターン: ${currentState.turn} | 昼 ☀️`;
         }
 
-        // キャラクターアイコン描画（画像ではなくCSS+絵文字で確実に描画）
         entities.forEach(entity => {
             const el = document.createElement('div');
             el.className = 'character';
@@ -386,12 +381,9 @@
                 displayName = '人狼';
             }
             
-            el.innerHTML = `
-                ${displayIcon}
-                <div class="character-name-label">${displayName}</div>
-            `;
+            el.innerHTML = `${displayIcon}<div class="character-name-label">${displayName}</div>`;
             
-            if (!isGameOver) {
+            if (!isGameOver && !isMoving) {
                 el.onclick = (e) => { e.stopPropagation(); handleCharacterClick(entity.id); };
             }
 
@@ -405,14 +397,14 @@
         if (currentState.boatPosition === 'right') boatEl.classList.add('right-side');
         else boatEl.classList.remove('right-side');
 
-        if (isGameOver && currentState.durability <= 0) boatEl.classList.add('broken');
+        // ゲームオーバーかつ耐久値0、もしくはクリア後の沈没表現
+        if ((isGameOver || currentState.durability <= 0) && boatEl.classList.contains('broken')) {
+            // broken class is already handled in checkRules or undo
+        }
     }
 
-    // -----------------------------------------------------
-    // 操作ロジック
-    // -----------------------------------------------------
     function handleCharacterClick(id) {
-        if (isGameOver) return;
+        if (isGameOver || isMoving) return;
         const pos = currentState.positions[id];
         
         if (pos.startsWith('boat')) {
@@ -428,34 +420,52 @@
     }
 
     boatEl.onclick = () => {
-        if (isGameOver) return;
+        if (isGameOver || isMoving) return;
 
         const onBoat = entities.filter(e => currentState.positions[e.id].startsWith('boat'));
         const hasDriver = onBoat.some(e => e.canDrive);
         
         let isWaiting = false;
         if (onBoat.length === 0 && currentStage === 'werewolf') {
-            isWaiting = true; // 人狼ステージで誰も乗っていなければ待機
+            isWaiting = true;
         } else if (!hasDriver) {
             showMessage("船を動かすには人間が必要です！", "game-over");
             return;
         }
 
+        // 状態保存
         saveState();
 
         if (!isWaiting) currentState.boatPosition = (currentState.boatPosition === 'left') ? 'right' : 'left';
         
         currentState.turn++;
-        currentState.durability--; // 動く（または待機する）たびに耐久値減少
+        currentState.durability--;
         
+        isMoving = true;
+        undoBtn.disabled = true; // 移動中はUNDO禁止
         render();
-        setTimeout(() => { checkRules(); }, 300);
+
+        // 0.8秒のアニメーション終了後に自動降車とルール判定を行う
+        setTimeout(() => {
+            if (!isWaiting) {
+                // 自動降車（乗っているキャラを到着した岸へ移動）
+                entities.forEach(e => {
+                    if (currentState.positions[e.id].startsWith('boat')) {
+                        currentState.positions[e.id] = currentState.boatPosition;
+                    }
+                });
+            }
+            render();
+            checkRules();
+            isMoving = false;
+            if (!isGameOver) undoBtn.disabled = false;
+        }, 800);
     };
 
     function saveState() { state.push(JSON.parse(JSON.stringify(currentState))); }
 
     function undo() {
-        if (state.length > 1) {
+        if (state.length > 1 && !isMoving) {
             currentState = state.pop();
             isGameOver = false;
             boatEl.classList.remove('broken');
@@ -465,23 +475,12 @@
         }
     }
 
-    // -----------------------------------------------------
-    // 勝敗判定
-    // -----------------------------------------------------
     function checkRules() {
-        const allRight = entities.every(e => currentState.positions[e.id] === 'right');
-        if (allRight) {
-            showMessage("🎉 全員無事に渡りきりました！クリア！", "success");
-            isGameOver = true;
-            return;
-        }
-
         const checkBank = (bankName) => {
             const inBank = entities.filter(e => {
                 const p = currentState.positions[e.id];
                 return p === bankName || (currentState.boatPosition === bankName && p.startsWith('boat'));
             });
-            
             const types = inBank.map(e => {
                 if (currentStage === 'werewolf' && e.type === 'werewolf_human') {
                     return stages['werewolf'].nightTurns.includes(currentState.turn) ? 'wolf' : 'farmer';
@@ -499,15 +498,36 @@
         const leftError = checkBank('left');
         const rightError = checkBank('right');
 
+        // まず、食われたかどうかのエラー判定
         if (leftError || rightError) {
             showMessage(`💀 ゲームオーバー！<br>${leftError || rightError}`, "game-over");
             isGameOver = true;
-        } else if (currentState.durability <= 0) {
-            showMessage("💥 イカダの耐久値が尽きて壊れてしまった！ゲームオーバー！", "game-over");
+            if (currentState.durability <= 0) boatEl.classList.add('broken');
+            return;
+        }
+
+        // 次に、全員が右岸に渡りきったか（クリア判定）
+        const allRight = entities.every(e => currentState.positions[e.id] === 'right');
+        
+        if (allRight) {
+            // 耐久値0でギリギリクリアした場合
+            if (currentState.durability <= 0) {
+                showMessage("🎉 全員無事に渡りきりました！<br>（イカダは沈没しましたが劇的クリアです！）", "success");
+                boatEl.classList.add('broken');
+            } else {
+                showMessage("🎉 全員無事に渡りきりました！クリア！", "success");
+            }
+            isGameOver = true;
+            return;
+        }
+
+        // クリアしていないのに耐久値が0になった場合
+        if (currentState.durability <= 0) {
+            showMessage("💥 イカダの耐久値が尽きて沈没してしまった！ゲームオーバー！", "game-over");
             isGameOver = true;
             boatEl.classList.add('broken');
         } else {
-            messageEl.innerHTML = "無事に移動しました。（残り耐久値：" + currentState.durability + "）";
+            messageEl.innerHTML = "無事に到着しました。（残り耐久値：" + currentState.durability + "）";
             messageEl.className = "";
         }
     }
@@ -517,9 +537,6 @@
         messageEl.className = className;
     }
 
-    // -----------------------------------------------------
-    // イベントリスナー
-    // -----------------------------------------------------
     document.getElementById('stage-select').addEventListener('change', (e) => {
         currentStage = e.target.value;
         initGame();
