@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（完全動作・バグ修正済）</title>
+    <title>川渡りパズル 究極版（ヒント・自動進行機能つき）</title>
     <style>
         :root {
-            --grass-color: #4caf50;
-            --grass-dark: #2e7d32;
-            --water-color: #0288d1;
-            --water-light: #4fc3f7;
+            --grass-color: #8bc34a;
+            --grass-dark: #558b2f;
+            --water-color: #29b6f6;
+            --water-light: #81d4fa;
             --wood-color: #8d6e63;
             --wood-dark: #5d4037;
-            --night-overlay: rgba(0, 0, 50, 0.7);
         }
 
         * {
@@ -23,8 +22,9 @@
             touch-action: manipulation;
         }
 
+        /* 画面が暗くならないように、基本を明るい空色に設定 */
         body {
-            background-color: #1a1a1a;
+            background-color: #e1f5fe;
             color: #333;
             display: flex;
             flex-direction: column;
@@ -33,7 +33,10 @@
             transition: background-color 1s ease;
         }
 
-        body.night-mode { background-color: #050510; }
+        /* 夜モードも完全な黒ではなく、深い夜空色にする */
+        body.night-mode { 
+            background-color: #1a237e; 
+        }
 
         /* ヘッダー＆UI */
         header {
@@ -42,7 +45,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             z-index: 10;
         }
 
@@ -52,19 +55,20 @@
             align-items: center;
         }
 
-        select, button {
-            padding: 8px 12px;
+        select, button.top-btn {
+            padding: 8px 10px;
             border-radius: 8px;
             border: 1px solid #ccc;
             background: #fff;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 13px;
             cursor: pointer;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
-        button:active { transform: translateY(2px); box-shadow: none; }
+        button.top-btn:active { transform: translateY(2px); box-shadow: none; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
         #undo-btn { background: #ff9800; color: white; border: none; }
         #reset-btn { background: #607d8b; color: white; border: none; }
 
@@ -72,148 +76,14 @@
         .durability-box {
             background: #d32f2f;
             color: white;
-            padding: 5px 12px;
+            padding: 5px 10px;
             border-radius: 20px;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             align-items: center;
-            gap: 5px;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.3);
         }
 
         .status-bar {
-            text-align: center;
-            padding: 8px;
-            background: #333;
-            color: white;
-            font-weight: bold;
-            font-size: 14px;
-            z-index: 10;
-            transition: background 1s ease;
-        }
-        body.night-mode .status-bar {
-            background: #111;
-            color: #ff5252;
-        }
-
-        /* ゲームエリア */
-        #game-area {
-            flex: 1;
-            display: flex;
-            flex-direction: row;
-            position: relative;
-            overflow: hidden;
-        }
-
-        body.night-mode #game-area::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: var(--night-overlay);
-            pointer-events: none;
-            z-index: 5;
-        }
-
-        .bank {
-            width: 25%;
-            height: 100%;
-            background: radial-gradient(circle at 50% 50%, var(--grass-color), var(--grass-dark));
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
-            display: flex;
-            flex-wrap: wrap;
-            align-content: flex-start;
-            justify-content: center;
-            gap: 10px;
-            padding: 20px 5px;
-            position: relative;
-            z-index: 2;
-        }
-
-        #left-bank { border-right: 8px solid #795548; }
-        #right-bank { border-left: 8px solid #795548; }
-
-        /* 川 */
-        #river {
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(to right, var(--water-color), var(--water-light), var(--water-color));
-            background-size: 200% 100%;
-            animation: flowWater 4s infinite linear;
-            position: relative;
-            display: flex;
-            align-items: center;
-            z-index: 1;
-        }
-
-        @keyframes flowWater {
-            0% { background-position: 0% 0; }
-            100% { background-position: 100% 0; }
-        }
-
-        /* イカダ */
-        #boat {
-            position: absolute;
-            left: 5%;
-            width: 100px;
-            height: 180px;
-            background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
-            border-radius: 10px;
-            box-shadow: 5px 10px 15px rgba(0,0,0,0.5);
-            display: flex;
-            flex-direction: column;
-            justify-content: space-evenly;
-            align-items: center;
-            transition: left 0.8s ease-in-out, transform 0.5s ease, filter 0.5s ease;
-            cursor: pointer;
-            z-index: 3;
-        }
-
-        #boat.right-side { left: calc(95% - 100px); }
-        #boat.broken { filter: grayscale(80%) brightness(0.6); transform: rotate(15deg) translateY(30px); }
-
-        .boat-slot {
-            width: 75px;
-            height: 75px;
-            border: 3px dashed rgba(255,255,255,0.8);
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0,0,0,0.1);
-        }
-
-        /* キャラクターアイコン */
-        .character {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0);
-            border: 3px solid #fff;
-            box-shadow: 0 5px 10px rgba(0,0,0,0.4), inset 0 -3px 5px rgba(0,0,0,0.2);
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 40px;
-            transition: transform 0.2s, box-shadow 0.2s;
-            position: relative;
-            z-index: 4;
-            user-select: none;
-        }
-
-        body.night-mode .character {
-            background: radial-gradient(circle at 30% 30%, #d0d0d0, #909090);
-            border-color: #aaa;
-        }
-
-        .character:active { 
-            transform: scale(0.9) translateY(2px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 -1px 2px rgba(0,0,0,0.2);
-        }
-        
-        .character-name-label {
-            position: absolute;
-            bottom: -18px;
-            font-size: 10px;
-            background: rgba(0,0,0,0.6
+            text-align: center
