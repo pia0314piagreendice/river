@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（完全ループ・自動ヒント搭載）</title>
+    <title>川渡りパズル 究極版（人狼上位存在ルール）</title>
     <style>
         :root {
             --grass-color: #8bc34a;
@@ -22,21 +22,19 @@
             touch-action: manipulation;
         }
 
-        /* 背景色の時間帯ループ（JSでクラスを切り替えます） */
         body {
             display: flex;
             flex-direction: column;
             min-height: 100vh;
-            min-height: 100dvh; /* スマホブラウザ対策 */
-            background-color: #e3f2fd; /* 朝 */
+            min-height: 100dvh;
+            background-color: #e3f2fd;
             color: #333;
             transition: background-color 1s ease;
         }
-        body.phase-day { background-color: #bbdefb; } /* 昼 */
-        body.phase-evening { background-color: #ffcc80; } /* 夕方 */
-        body.phase-night { background-color: #1a237e; color: #fff; } /* 夜 */
+        body.phase-day { background-color: #bbdefb; }
+        body.phase-evening { background-color: #ffcc80; }
+        body.phase-night { background-color: #1a237e; color: #fff; }
 
-        /* ヘッダー＆UI */
         header {
             background: rgba(255, 255, 255, 0.95);
             padding: 10px;
@@ -96,17 +94,15 @@
             color: #ff8a80;
         }
 
-        /* ゲームエリア（画面が潰れないようにflex-growを使用） */
         #game-area {
             flex-grow: 1;
             display: flex;
             flex-direction: row;
             position: relative;
             overflow: hidden;
-            min-height: 250px; /* 確実な高さを担保 */
+            min-height: 250px;
         }
 
-        /* 夜の暗闇フィルター */
         body.phase-night #game-area::after {
             content: '';
             position: absolute;
@@ -125,8 +121,8 @@
             flex-wrap: wrap;
             align-content: flex-start;
             justify-content: center;
-            gap: 10px;
-            padding: 20px 5px;
+            gap: 5px;
+            padding: 15px 5px;
             position: relative;
             z-index: 2;
         }
@@ -134,7 +130,6 @@
         #left-bank { border-right: 12px solid #795548; }
         #right-bank { border-left: 12px solid #795548; }
 
-        /* 川 */
         #river {
             width: 50%;
             height: 100%;
@@ -145,3 +140,520 @@
             display: flex;
             align-items: center;
             z-index: 1;
+        }
+
+        @keyframes flowWater { 100% { background-position: 100% 0; } }
+
+        #boat {
+            position: absolute;
+            left: 5%;
+            width: 85px;
+            height: 170px;
+            background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
+            border-radius: 10px;
+            box-shadow: 5px 10px 15px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: center;
+            transition: left 0.8s ease-in-out, transform 0.5s ease, filter 0.5s ease;
+            z-index: 3;
+        }
+
+        #boat.right-side { left: calc(95% - 85px); }
+        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) translateY(30px); }
+
+        .boat-slot {
+            width: 65px;
+            height: 65px;
+            border: 3px dashed rgba(255,255,255,0.8);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.15);
+        }
+
+        .character {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0);
+            border: 3px solid #fff;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 32px;
+            transition: transform 0.2s;
+            position: relative;
+            z-index: 6;
+            user-select: none;
+            color: #333;
+        }
+
+        body.phase-night .character { border-color: #999; }
+        .character:active { transform: scale(0.9) translateY(2px); }
+        
+        .character-name-label {
+            position: absolute;
+            bottom: -15px;
+            font-size: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 4px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        #message-area {
+            padding: 10px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            min-height: 60px;
+            font-weight: bold;
+            font-size: 15px;
+            border-top: 1px solid #ddd;
+        }
+
+        .game-over { color: #d32f2f !important; }
+        .success { color: #2e7d32 !important; }
+
+        .bottom-actions {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-top: 1px solid #ccc;
+            z-index: 10;
+        }
+
+        .bottom-actions button {
+            padding: 15px 5px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 30px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+
+        #hint-btn { background: #ffc107; color: #333; flex: 1; }
+        #wait-btn { background: #795548; color: white; flex: 1; }
+        #move-boat-btn { background: #2196f3; color: white; flex: 2; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <select id="stage-select">
+            <option value="werewolf">ステージ3：月夜の人狼（オオカミ追加版）</option>
+            <option value="classic">ステージ1：基本（狼・ヤギ・キャベツ）</option>
+            <option value="twins">ステージ2：双子の番人</option>
+        </select>
+        <div class="controls">
+            <div class="durability-box" id="durability-box">
+                ⛵ 耐久: <span id="durability-value">5</span>
+            </div>
+            <button id="undo-btn" class="top-btn">戻す</button>
+            <button id="reset-btn" class="top-btn">リセット</button>
+        </div>
+    </header>
+
+    <div class="status-bar" id="status-bar">
+        ターン: 1 | 🌅 朝
+    </div>
+
+    <div id="game-area">
+        <div id="left-bank" class="bank"></div>
+        <div id="river">
+            <div id="boat">
+                <div class="boat-slot" id="slot-0"></div>
+                <div class="boat-slot" id="slot-1"></div>
+            </div>
+        </div>
+        <div id="right-bank" class="bank"></div>
+    </div>
+
+    <div id="message-area">
+        アイコンをタップして乗せ、「動かす」か「待機」を押してください。
+    </div>
+
+    <div class="bottom-actions">
+        <button id="hint-btn">💡 ヒント</button>
+        <button id="wait-btn">⏳ 待機</button>
+        <button id="move-boat-btn">🚢 動かす</button>
+    </div>
+
+<script>
+    const stages = {
+        werewolf: {
+            maxMoves: 5,
+            turnLimit: true, 
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
+                { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
+                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ],
+            solution: [
+                ['f1', 'g1'], // 1. 朝: 右へ
+                ['f1'],       // 2. 昼: 左へ戻る
+                ['f1', 'w1'], // 3. 夕: 右へ
+                'WAIT',       // 4. 夜: 待機（左岸でBが人狼化するがキャベツのみで無害）
+                ['f2', 'c1']  // 5. 朝: 右へ（Bが戻ってキャベツを運ぶ）
+            ]
+        },
+        classic: {
+            maxMoves: 7,
+            turnLimit: false,
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間', icon: '👦', canDrive: true },
+                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ],
+            solution: [ ['f1', 'g1'], ['f1'], ['f1', 'w1'], ['f1', 'g1'], ['f1', 'c1'], ['f1'], ['f1', 'g1'] ]
+        },
+        twins: {
+            maxMoves: 9,
+            turnLimit: false,
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
+                { id: 'f2', type: 'farmer', name: '人間B', icon: '👱‍♂️', canDrive: true },
+                { id: 'g1', type: 'goat', name: 'ヤギ1', icon: '🐐', canDrive: false },
+                { id: 'g2', type: 'goat', name: 'ヤギ2', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ1', icon: '🥬', canDrive: false },
+                { id: 'c2', type: 'cabbage', name: 'キャベツ2', icon: '🥬', canDrive: false }
+            ],
+            solution: [ ['f1', 'g1'], ['f1'], ['f2', 'g2'], ['f2'], ['f1', 'f2'], ['f1'], ['f1', 'c1'], ['f2'], ['f2', 'c2'] ]
+        }
+    };
+
+    const phaseNames = ['🌅 朝', '☀️ 昼', '🌇 夕', '🌕 夜'];
+    const phaseClasses = ['phase-morning', 'phase-day', 'phase-evening', 'phase-night'];
+
+    let currentStage = 'werewolf';
+    let entities = [];
+    let state = []; 
+    let currentState = {};
+    let isGameOver = false;
+    let isMoving = false; 
+    let isHintMode = false;
+    let currentHintStep = 0;
+
+    const leftBankEl = document.getElementById('left-bank');
+    const rightBankEl = document.getElementById('right-bank');
+    const boatEl = document.getElementById('boat');
+    const boatSlotsEl = [document.getElementById('slot-0'), document.getElementById('slot-1')];
+    const messageEl = document.getElementById('message-area');
+    const statusBarEl = document.getElementById('status-bar');
+    const durabilityEl = document.getElementById('durability-value');
+    const undoBtn = document.getElementById('undo-btn');
+    const moveBoatBtn = document.getElementById('move-boat-btn');
+    const waitBtn = document.getElementById('wait-btn');
+    const hintBtn = document.getElementById('hint-btn');
+
+    function initGame(resetHint = true) {
+        const stageData = stages[currentStage];
+        entities = JSON.parse(JSON.stringify(stageData.entities));
+        
+        currentState = {
+            turn: 1,
+            durability: stageData.maxMoves,
+            boatPosition: 'left',
+            positions: {}
+        };
+        entities.forEach(e => { currentState.positions[e.id] = 'left'; });
+        state = [JSON.parse(JSON.stringify(currentState))];
+        isGameOver = false;
+        isMoving = false;
+        
+        if (resetHint) {
+            isHintMode = false;
+            currentHintStep = 0;
+        }
+        
+        boatEl.classList.remove('right-side', 'broken');
+        messageEl.innerHTML = 'アイコンをタップして乗せ、「動かす」か「待機」を押してください。';
+        messageEl.className = '';
+        
+        updateButtonStates();
+        render();
+    }
+
+    function render() {
+        leftBankEl.innerHTML = '';
+        rightBankEl.innerHTML = '';
+        boatSlotsEl[0].innerHTML = '';
+        boatSlotsEl[1].innerHTML = '';
+
+        durabilityEl.innerText = currentState.durability;
+
+        let phase = 0;
+        if (stages[currentStage].turnLimit) {
+            phase = (currentState.turn - 1) % 4;
+            document.body.className = phaseClasses[phase];
+            statusBarEl.innerHTML = `ターン: ${currentState.turn} | ${phaseNames[phase]} ` + (phase === 3 ? '(人間Bが人狼化!)' : '');
+        } else {
+            document.body.className = phaseClasses[0];
+            statusBarEl.innerHTML = `ターン: ${currentState.turn} | ☀️ 昼`;
+        }
+        let isNight = (phase === 3);
+
+        entities.forEach(entity => {
+            const el = document.createElement('div');
+            el.className = 'character';
+            el.id = entity.id;
+            
+            let displayIcon = entity.icon;
+            let displayName = entity.name;
+            if (entity.type === 'werewolf_human' && isNight) {
+                displayIcon = '🐺';
+                displayName = '人狼';
+                el.style.color = '#ff5252';
+            }
+            
+            el.innerHTML = `${displayIcon}<div class="character-name-label">${displayName}</div>`;
+            
+            if (!isGameOver && !isMoving) {
+                el.onclick = (e) => { 
+                    e.stopPropagation(); 
+                    isHintMode = false; 
+                    handleCharacterClick(entity.id); 
+                };
+            }
+
+            const pos = currentState.positions[entity.id];
+            if (pos === 'left') leftBankEl.appendChild(el);
+            else if (pos === 'right') rightBankEl.appendChild(el);
+            else if (pos === 'boat_0') boatSlotsEl[0].appendChild(el);
+            else if (pos === 'boat_1') boatSlotsEl[1].appendChild(el);
+        });
+
+        if (currentState.boatPosition === 'right') boatEl.classList.add('right-side');
+        else boatEl.classList.remove('right-side');
+    }
+
+    function handleCharacterClick(id) {
+        if (isGameOver || isMoving) return;
+        const pos = currentState.positions[id];
+        
+        if (pos.startsWith('boat')) {
+            currentState.positions[id] = currentState.boatPosition;
+        } else if (pos === currentState.boatPosition) {
+            const values = Object.values(currentState.positions);
+            if (!values.includes('boat_0')) currentState.positions[id] = 'boat_0';
+            else if (!values.includes('boat_1')) currentState.positions[id] = 'boat_1';
+        }
+        render();
+    }
+
+    function performBoatMove() {
+        if (isGameOver || isMoving) return;
+
+        const onBoat = entities.filter(e => currentState.positions[e.id].startsWith('boat'));
+        const hasDriver = onBoat.some(e => e.canDrive);
+        
+        if (!hasDriver) {
+            showMessage("船を動かすには人間(または人狼)が必要です！", "game-over");
+            isHintMode = false;
+            return;
+        }
+
+        saveState();
+        currentState.boatPosition = (currentState.boatPosition === 'left') ? 'right' : 'left';
+        currentState.turn++;
+        currentState.durability--;
+        
+        isMoving = true;
+        updateButtonStates();
+        render();
+
+        setTimeout(() => {
+            entities.forEach(e => {
+                if (currentState.positions[e.id].startsWith('boat')) {
+                    currentState.positions[e.id] = currentState.boatPosition;
+                }
+            });
+            isMoving = false; 
+            render();
+            checkRules();
+            updateButtonStates();
+        }, 800);
+    }
+
+    function performWait() {
+        if (isGameOver || isMoving) return;
+        saveState();
+        currentState.turn++;
+        currentState.durability--;
+        render();
+        checkRules();
+        updateButtonStates();
+    }
+
+    moveBoatBtn.onclick = () => { isHintMode = false; performBoatMove(); };
+    waitBtn.onclick = () => { isHintMode = false; performWait(); };
+
+    hintBtn.onclick = () => {
+        if (isMoving || isGameOver) return;
+        
+        if (!isHintMode || currentHintStep >= stages[currentStage].solution.length) {
+            initGame(false); 
+            isHintMode = true;
+            currentHintStep = 0;
+            setTimeout(executeHintStep, 100);
+            return;
+        }
+        executeHintStep();
+    };
+
+    function executeHintStep() {
+        const move = stages[currentStage].solution[currentHintStep];
+        
+        if (move === 'WAIT') {
+            performWait();
+            currentHintStep++;
+            return;
+        }
+
+        entities.forEach(e => {
+            if (currentState.positions[e.id].startsWith('boat')) {
+                currentState.positions[e.id] = currentState.boatPosition;
+            }
+        });
+
+        move.forEach((id, index) => {
+            currentState.positions[id] = `boat_${index}`;
+        });
+        
+        render();
+        isMoving = true;
+        updateButtonStates();
+        
+        setTimeout(() => {
+            isMoving = false;
+            performBoatMove();
+            currentHintStep++;
+        }, 400);
+    }
+
+    function updateButtonStates() {
+        const disable = isMoving || isGameOver;
+        undoBtn.disabled = disable;
+        moveBoatBtn.disabled = disable;
+        waitBtn.disabled = disable;
+        hintBtn.disabled = isMoving; 
+    }
+
+    function saveState() { state.push(JSON.parse(JSON.stringify(currentState))); }
+
+    function undo() {
+        if (state.length > 1 && !isMoving) {
+            currentState = state.pop();
+            isGameOver = false;
+            isHintMode = false; 
+            boatEl.classList.remove('broken');
+            messageEl.innerHTML = "一手戻しました。";
+            messageEl.className = "";
+            render();
+            updateButtonStates();
+        }
+    }
+
+    function checkRules() {
+        const checkBank = (bankName) => {
+            const inBank = entities.filter(e => {
+                const p = currentState.positions[e.id];
+                return p === bankName || (currentState.boatPosition === bankName && p.startsWith('boat'));
+            });
+            
+            const hasFarmerA = inBank.some(e => e.id === 'f1');
+            const hasFarmerB = inBank.some(e => e.id === 'f2');
+            const hasWolf = inBank.some(e => e.id === 'w1');
+            const hasGoat = inBank.some(e => e.id === 'g1');
+            const hasCabbage = inBank.some(e => e.id === 'c1');
+            
+            let isNight = false;
+            if (stages[currentStage].turnLimit) {
+                isNight = ((currentState.turn - 1) % 4 === 3);
+            }
+
+            // 夜間：人間Bが人狼化している場合（上位存在ルール）
+            if (isNight && hasFarmerB) {
+                if (hasFarmerA) return "人狼が人間Aを食べてしまった！🐺🩸👦";
+                if (hasWolf) return "人狼がオオカミを食べてしまった！🐺🩸🐺";
+                if (hasGoat) return "人狼がヤギを食べてしまった！🐺🩸🐐";
+                // キャベツは食べない
+            }
+
+            // 昼間・または人狼がいない場合の通常ルール（見張り判定）
+            // 夜の場合、人間B（人狼）は見張りとして機能しないので、見張りは人間Aのみ。
+            const hasGuard = isNight ? hasFarmerA : (hasFarmerA || hasFarmerB);
+
+            if (!hasGuard) {
+                if (hasWolf && hasGoat) return "オオカミがヤギを食べてしまった！🐺 ＞ 🐐";
+                if (hasGoat && hasCabbage) return "ヤギがキャベツを食べてしまった！🐐 ＞ 🥬";
+            }
+            return null;
+        };
+
+        const leftError = checkBank('left');
+        const rightError = checkBank('right');
+
+        if (leftError || rightError) {
+            showMessage(`💀 ゲームオーバー！<br>${leftError || rightError}`, "game-over");
+            isGameOver = true;
+            isHintMode = false;
+            if (currentState.durability <= 0) boatEl.classList.add('broken');
+            return;
+        }
+
+        const allRight = entities.every(e => currentState.positions[e.id] === 'right');
+        
+        if (allRight) {
+            if (currentState.durability <= 0) {
+                showMessage("🎉 全員無事に到着！<br>（イカダは沈没しましたが劇的クリアです！）", "success");
+                boatEl.classList.add('broken');
+            } else {
+                showMessage("🎉 全員無事に渡りきりました！クリア！", "success");
+            }
+            isGameOver = true;
+            isHintMode = false;
+            return;
+        }
+
+        if (currentState.durability <= 0) {
+            showMessage("💥 耐久値が尽きて沈没した！ゲームオーバー！", "game-over");
+            isGameOver = true;
+            isHintMode = false;
+            boatEl.classList.add('broken');
+        } else {
+            if (isHintMode) messageEl.innerHTML = "ヒント自動進行中...（連打で次へ）";
+            else messageEl.innerHTML = "無事に到着しました。（残り耐久値：" + currentState.durability + "）";
+            messageEl.className = "";
+        }
+    }
+
+    function showMessage(msg, className) {
+        messageEl.innerHTML = msg;
+        messageEl.className = className;
+    }
+
+    document.getElementById('stage-select').addEventListener('change', (e) => {
+        currentStage = e.target.value;
+        initGame(true);
+    });
+    document.getElementById('reset-btn').addEventListener('click', () => initGame(true));
+    document.getElementById('undo-btn').addEventListener('click', undo);
+
+    initGame(true);
+</script>
+</body>
+</html>
