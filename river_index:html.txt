@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>川渡りパズル 究極版（完全動作スタンドアロン）</title>
+    <style>
+        :root {
+            --grass-color: #4caf50;
+            --grass-dark: #2e7d32;
+            --water-color: #0288d1;
+            --water-light: #4fc3f7;
+            --wood-color: #8d6e63;
+            --wood-dark: #5d4037;
+            --night-overlay: rgba(0, 0, 50, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            touch-action: manipulation;
+        }
+
+        body {
+            background-color: #1a1a1a;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 1s ease;
+        }
+
+        body.night-mode { background-color: #050510; }
+
+        /* ヘッダー＆UI */
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        select, button {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            background: #fff;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        button:active { transform: translateY(2px); box-shadow: none; }
+        #undo-btn { background: #ff9800; color: white; border: none; }
+        #reset-btn { background: #607d8b; color: white; border: none; }
+
+        /* 耐久値 UI */
+        .durability-box {
+            background: #d32f2f;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+        }
+
+        .status-bar {
+            text-align: center;
+            padding: 8px;
+            background: #333;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            z-index: 10;
+            transition: background 1s ease;
+        }
+        body.night-mode .status-bar {
+            background: #111;
+            color: #ff5252;
+        }
+
+        /* ゲームエリア（左岸・川・右岸） */
+        #game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body.night-mode #game-area::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--night-overlay);
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .bank {
+            width: 25%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, var(--grass-color), var(--grass-dark));
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            justify-content: center;
+            gap: 10px;
+            padding: 20px 5px;
+            position: relative;
+            z-index: 2;
+        }
+
+        #left-bank { border-right: 8px solid #795548; }
+        #right-bank { border-left: 8px solid #795548; }
+
+        /* 川 */
+        #river {
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, var(--water-color), var(--water-light), var(--water-color));
+            background-size: 200% 100%;
+            animation: flowWater 4s infinite linear;
+            position: relative;
+            display: flex;
+            align-items: center;
+            z-index: 1;
+        }
+
+        @keyframes flowWater {
+            0% { background-position: 0% 0; }
+            100% { background-position: 100% 0; }
+        }
+
+        /* イカダ */
+        #boat {
+            position: absolute;
+            left: 5%;
+            width: 100px;
+            height: 180px;
+            background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
+            border-radius: 10px;
+            box-shadow: 5px 10px 15px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: center;
+            transition: left 0.8s ease-in-out;
+            cursor: pointer;
+            z-index: 3;
+        }
+
+        #boat.right-side { left: calc(95% - 100px); }
+        #boat.broken { filter: grayscale(100%) opacity(0.7); transform: rotate(15deg) translateY(20px); }
+
+        .boat-slot {
+            width: 75px;
+            height: 75px;
+            border: 3px dashed rgba(255,255,255,0.8);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.1);
+        }
+
+        /* キャラクターアイコン（画像依存を完全に排除し、リッチなCSS絵文字メダルに変更） */
+        .character {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0);
+            border: 3px solid #fff;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.4), inset 0 -3px 5px rgba(0,0,0,0.2);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 40px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            z-index: 4;
+            user-select: none;
+        }
+
+        body.night-mode .character {
+            background: radial-gradient(circle at 30% 30%, #d0d0d0, #909090);
+            border-color: #aaa;
+        }
+
+        .character:active { 
+            transform: scale(0.9) translateY(2px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4), inset 0 -1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .character-name-label {
+            position: absolute;
+            bottom: -18px;
+            font-size: 10px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 2px 5px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* メッセージエリア */
+        #message-area {
+            padding: 15px;
+            text-align: center;
+            background: #fff;
+            min-height: 80px;
+            font-weight: bold;
+            font-size: 16px;
+            border-top: 2px solid #ddd;
+        }
+
+        .game-over { color: #d32f2f; }
+        .success { color: #2e7d32; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <select id="stage-select">
+            <option value="classic">ステージ1：基本（最短7手）</option>
+            <option value="twins">ステージ2：双子（最短9手）</option>
+            <option value="werewolf">ステージ3：人狼（最短7手）</option>
+        </select>
+        <div class="controls">
+            <div class="durability-box" id="durability-box">
+                ⛵ 耐久: <span id="durability-value">7</span>
+            </div>
+            <button id="undo-btn">🔙 戻す</button>
+            <button id="reset-btn">🔄 リセット</button>
+        </div>
+    </header>
+
+    <div class="status-bar" id="status-bar">
+        ターン: 1 | 昼☀️
+    </div>
+
+    <div id="game-area">
+        <div id="left-bank" class="bank"></div>
+        <div id="river">
+            <div id="boat">
+                <div class="boat-slot" id="slot-0"></div>
+                <div class="boat-slot" id="slot-1"></div>
+            </div>
+        </div>
+        <div id="right-bank" class="bank"></div>
+    </div>
+
+    <div id="message-area">
+        アイコンをタップして船に乗せよう。<br>船をタップすると耐久値を1消費して向こう岸へ移動します。
+    </div>
+
+<script>
+    // -----------------------------------------------------
+    // ステージデータ定義（画像を排除し、確実な絵文字アイコンに）
+    // -----------------------------------------------------
+    const stages = {
+        classic: {
+            maxMoves: 7, // 最短7手
+            turnLimit: false,
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間', icon: '👦', canDrive: true },
+                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ]
+        },
+        twins: {
+            maxMoves: 9, // 最短9手
+            turnLimit: false,
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
+                { id: 'f2', type: 'farmer', name: '人間B', icon: '👱‍♂️', canDrive: true },
+                { id: 'g1', type: 'goat', name: 'ヤギ1', icon: '🐐', canDrive: false },
+                { id: 'g2', type: 'goat', name: 'ヤギ2', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ1', icon: '🥬', canDrive: false },
+                { id: 'c2', type: 'cabbage', name: 'キャベツ2', icon: '🥬', canDrive: false }
+            ]
+        },
+        werewolf: {
+            maxMoves: 7, // 最短7手
+            turnLimit: true,
+            nightTurns: [4, 5],
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
+                { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ]
+        }
+    };
+
+    // -----------------------------------------------------
+    // 状態管理
+    // -----------------------------------------------------
+    let currentStage = 'classic';
+    let entities = [];
+    let state = []; // 履歴用 (UNDO)
+    let currentState = {};
+    let isGameOver = false;
+
+    const leftBankEl = document.getElementById('left-bank');
+    const rightBankEl = document.getElementById('right-bank');
+    const boatEl = document.getElementById('boat');
+    const boatSlotsEl = [document.getElementById('slot-0'), document.getElementById('slot-1')];
+    const messageEl = document.getElementById('message-area');
+    const statusBarEl = document.getElementById('status-bar');
+    const durabilityEl = document.getElementById('durability-value');
+
+    // -----------------------------------------------------
+    // 初期化と描画
+    // -----------------------------------------------------
+    function initGame() {
+        const stageData = stages[currentStage];
+        entities = JSON.parse(JSON.stringify(stageData.entities));
+        
+        currentState = {
+            turn: 1,
+            durability: stageData.maxMoves,
+            boatPosition: 'left',
+            positions: {}
+        };
+        entities.forEach(e => { currentState.positions[e.id] = 'left'; });
+        state = [JSON.parse(JSON.stringify(currentState))];
+        isGameOver = false;
+        
+        boatEl.className = ''; 
+        document.body.className = '';
+        messageEl.innerHTML = 'アイコンをタップして船に乗せよう。<br>最短手数でないとイカダが壊れます！';
+        messageEl.className = '';
+        
+        render();
+    }
+
+    function render() {
+        leftBankEl.innerHTML = '';
+        rightBankEl.innerHTML = '';
+        boatSlotsEl[0].innerHTML = '';
+        boatSlotsEl[1].innerHTML = '';
+
+        durabilityEl.innerText = currentState.durability;
+
+        let isNight = stages[currentStage].turnLimit && stages[currentStage].nightTurns.includes(currentState.turn);
+        if (isNight) {
+            document.body.classList.add('night-mode');
+            statusBarEl.innerHTML = `ターン: ${currentState.turn} | 夜 🌕 (人間Bが人狼化!)`;
+        } else {
+            document.body.classList.remove('night-mode');
+            statusBarEl.innerHTML = `ターン: ${currentState.turn} | 昼 ☀️`;
+        }
+
+        // キャラクターアイコン描画（画像ではなくCSS+絵文字で確実に描画）
+        entities.forEach(entity => {
+            const el = document.createElement('div');
+            el.className = 'character';
+            el.id = entity.id;
+            
+            let displayIcon = entity.icon;
+            let displayName = entity.name;
+            if (entity.type === 'werewolf_human' && isNight) {
+                displayIcon = '🐺';
+                displayName = '人狼';
+            }
+            
+            el.innerHTML = `
+                ${displayIcon}
+                <div class="character-name-label">${displayName}</div>
+            `;
+            
+            if (!isGameOver) {
+                el.onclick = (e) => { e.stopPropagation(); handleCharacterClick(entity.id); };
+            }
+
+            const pos = currentState.positions[entity.id];
+            if (pos === 'left') leftBankEl.appendChild(el);
+            else if (pos === 'right') rightBankEl.appendChild(el);
+            else if (pos === 'boat_0') boatSlotsEl[0].appendChild(el);
+            else if (pos === 'boat_1') boatSlotsEl[1].appendChild(el);
+        });
+
+        if (currentState.boatPosition === 'right') boatEl.classList.add('right-side');
+        else boatEl.classList.remove('right-side');
+
+        if (isGameOver && currentState.durability <= 0) boatEl.classList.add('broken');
+    }
+
+    // -----------------------------------------------------
+    // 操作ロジック
+    // -----------------------------------------------------
+    function handleCharacterClick(id) {
+        if (isGameOver) return;
+        const pos = currentState.positions[id];
+        
+        if (pos.startsWith('boat')) {
+            currentState.positions[id] = currentState.boatPosition;
+        } else if (pos === currentState.boatPosition) {
+            if (!currentState.positions['boat_0'] && Object.values(currentState.positions).indexOf('boat_0') === -1) {
+                currentState.positions[id] = 'boat_0';
+            } else if (!currentState.positions['boat_1'] && Object.values(currentState.positions).indexOf('boat_1') === -1) {
+                currentState.positions[id] = 'boat_1';
+            }
+        }
+        render();
+    }
+
+    boatEl.onclick = () => {
+        if (isGameOver) return;
+
+        const onBoat = entities.filter(e => currentState.positions[e.id].startsWith('boat'));
+        const hasDriver = onBoat.some(e => e.canDrive);
+        
+        let isWaiting = false;
+        if (onBoat.length === 0 && currentStage === 'werewolf') {
+            isWaiting = true; // 人狼ステージで誰も乗っていなければ待機
+        } else if (!hasDriver) {
+            showMessage("船を動かすには人間が必要です！", "game-over");
+            return;
+        }
+
+        saveState();
+
+        if (!isWaiting) currentState.boatPosition = (currentState.boatPosition === 'left') ? 'right' : 'left';
+        
+        currentState.turn++;
+        currentState.durability--; // 動く（または待機する）たびに耐久値減少
+        
+        render();
+        setTimeout(() => { checkRules(); }, 300);
+    };
+
+    function saveState() { state.push(JSON.parse(JSON.stringify(currentState))); }
+
+    function undo() {
+        if (state.length > 1) {
+            currentState = state.pop();
+            isGameOver = false;
+            boatEl.classList.remove('broken');
+            messageEl.innerHTML = "一手戻しました。";
+            messageEl.className = "";
+            render();
+        }
+    }
+
+    // -----------------------------------------------------
+    // 勝敗判定
+    // -----------------------------------------------------
+    function checkRules() {
+        const allRight = entities.every(e => currentState.positions[e.id] === 'right');
+        if (allRight) {
+            showMessage("🎉 全員無事に渡りきりました！クリア！", "success");
+            isGameOver = true;
+            return;
+        }
+
+        const checkBank = (bankName) => {
+            const inBank = entities.filter(e => {
+                const p = currentState.positions[e.id];
+                return p === bankName || (currentState.boatPosition === bankName && p.startsWith('boat'));
+            });
+            
+            const types = inBank.map(e => {
+                if (currentStage === 'werewolf' && e.type === 'werewolf_human') {
+                    return stages['werewolf'].nightTurns.includes(currentState.turn) ? 'wolf' : 'farmer';
+                }
+                return e.type;
+            });
+
+            if (!types.includes('farmer')) {
+                if (types.includes('wolf') && types.includes('goat')) return "オオカミがヤギを食べた！🐺 ＞ 🐐";
+                if (types.includes('goat') && types.includes('cabbage')) return "ヤギがキャベツを食べた！🐐 ＞ 🥬";
+            }
+            return null;
+        };
+
+        const leftError = checkBank('left');
+        const rightError = checkBank('right');
+
+        if (leftError || rightError) {
+            showMessage(`💀 ゲームオーバー！<br>${leftError || rightError}`, "game-over");
+            isGameOver = true;
+        } else if (currentState.durability <= 0) {
+            showMessage("💥 イカダの耐久値が尽きて壊れてしまった！ゲームオーバー！", "game-over");
+            isGameOver = true;
+            boatEl.classList.add('broken');
+        } else {
+            messageEl.innerHTML = "無事に移動しました。（残り耐久値：" + currentState.durability + "）";
+            messageEl.className = "";
+        }
+    }
+
+    function showMessage(msg, className) {
+        messageEl.innerHTML = msg;
+        messageEl.className = className;
+    }
+
+    // -----------------------------------------------------
+    // イベントリスナー
+    // -----------------------------------------------------
+    document.getElementById('stage-select').addEventListener('change', (e) => {
+        currentStage = e.target.value;
+        initGame();
+    });
+    document.getElementById('reset-btn').addEventListener('click', initGame);
+    document.getElementById('undo-btn').addEventListener('click', undo);
+
+    initGame();
+</script>
+</body>
+</html>
