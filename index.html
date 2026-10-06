@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（ロジック完全・1手ヒント対応）</title>
+    <title>川渡りパズル 究極版（レイアウト完全中央揃え）</title>
     <style>
         :root {
             --wood-color: #8d6e63;
@@ -18,7 +18,6 @@
             touch-action: manipulation;
         }
 
-        /* 画面崩れを防ぐ固定レイアウト */
         body {
             display: flex;
             flex-direction: column;
@@ -31,7 +30,6 @@
             transition: background 0.8s ease, color 0.8s ease;
         }
 
-        /* 天気フェーズの背景色設定 */
         body.weather-morning { background: #87CEEB; }
         body.weather-day { background: #4FC3F7; }
         body.weather-evening { background: #FF8A65; }
@@ -68,7 +66,7 @@
             display: flex;
             gap: 8px;
             align-items: center;
-            padding-right: 40px; /* 天気アイコン用のスペース */
+            padding-right: 40px;
         }
 
         select, button.top-btn {
@@ -126,7 +124,8 @@
             box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
             display: flex;
             flex-wrap: wrap;
-            align-content: center;
+            align-content: center; /* 複数行時の縦中央揃え */
+            align-items: center;   /* 単一行時の縦中央揃え（追加） */
             justify-content: center;
             gap: 8px;
             padding: 10px 5px;
@@ -146,6 +145,7 @@
             position: relative;
             display: flex;
             align-items: center;
+            justify-content: center;
             z-index: 1;
         }
 
@@ -154,6 +154,8 @@
         #boat {
             position: absolute;
             left: 5%;
+            top: 50%;              /* 上から50%の位置に固定（追加） */
+            margin-top: -75px;     /* 高さの半分戻して完全な縦中央に（追加） */
             width: 80px;
             height: 150px;
             background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
@@ -168,7 +170,7 @@
         }
 
         #boat.right-side { left: calc(95% - 80px); }
-        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) translateY(20px); }
+        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) translateX(10px); }
 
         .boat-slot {
             width: 60px;
@@ -265,9 +267,9 @@
 
     <header>
         <select id="stage-select">
-            <option value="werewolf">ステージ3：月夜の人狼（全9手・完全論理）</option>
-            <option value="twins">ステージ2：双子の番人（全7手）</option>
-            <option value="classic">ステージ1：基本（全7手）</option>
+            <option value="werewolf">ステージ3：月夜の人狼（全9手ルート）</option>
+            <option value="twins">ステージ2：双子の番人（全7手ルート）</option>
+            <option value="classic">ステージ1：基本（全7手ルート）</option>
         </select>
         <div class="controls">
             <div class="durability-box">
@@ -304,12 +306,9 @@
     </div>
 
 <script>
-    // -----------------------------------------------------
-    // パズルのロジック定義（数学的検証済みの完璧な解答）
-    // -----------------------------------------------------
     const stages = {
         werewolf: {
-            maxMoves: 9, // 人狼から逃げ切る究極の9手
+            maxMoves: 9,
             hasWeather: true, 
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
@@ -318,14 +317,13 @@
                 { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
                 { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
             ],
-            // 満月(ターン5)を安全にやり過ごす唯一の解法
+            // 満月(ターン5)を安全にやり過ごす唯一の9手解法
             solution: [
                 ['f2', 'g1'], // 1(朝): B+ヤギ -> 右 (左: A,狼,菜 / 右: B,ヤギ)
                 ['f2'],       // 2(昼): B <- 左 (左: A,B,狼,菜 / 右: ヤギ)
                 ['f1', 'f2'], // 3(夕): A+B -> 右 (左: 狼,菜 / 右: A,B,ヤギ)
                 ['f1', 'g1'], // 4(夜): A+ヤギ <- 左 (左: A,狼,ヤギ,菜 / 右: B)
-                // ▼ターン5（満月）の開始。右岸のBが人狼になるが1人なので安全！左はAが守る！
-                ['f1', 'g1'], // 5(満月): A+ヤギ -> 右 (到着すると朝になり、Bは人間に戻る)
+                ['f1', 'g1'], // 5(満月): A+ヤギ -> 右 (右岸のBが人狼になるが、人狼はヤギを食べないので安全！)
                 ['f1'],       // 6(朝): A <- 左
                 ['f1', 'w1'], // 7(昼): A+狼 -> 右 
                 ['f2'],       // 8(夕): B <- 左
@@ -342,7 +340,6 @@
                 { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
                 { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
             ],
-            // 双子が交代で運ぶ美しい7手
             solution: [
                 ['f1', 'g1'], // 1: A+ヤギ -> 右
                 ['f1'],       // 2: A <- 左
@@ -366,7 +363,6 @@
         }
     };
 
-    // 天気フェーズの5ターンループ設定
     const weatherData = {
         0: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false },
         1: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false },
@@ -431,7 +427,6 @@
 
         let isNight = false;
 
-        // 天気の更新（ステージ3のみ）
         if (stages[currentStage].hasWeather) {
             const phase = (currentState.turn - 1) % 5;
             const wInfo = weatherData[phase];
@@ -444,7 +439,6 @@
             statusBarEl.innerHTML = `ターン: ${currentState.turn} | ☀️ 昼`;
         }
 
-        // キャラクター描画
         entities.forEach(entity => {
             const el = document.createElement('div');
             el.className = 'character';
@@ -464,7 +458,7 @@
             el.onclick = (e) => { 
                 e.stopPropagation(); 
                 if (isGameOver || isMoving) return;
-                currentHintStep = 0; // 手動操作が入ったらヒント順序をリセット
+                currentHintStep = 0; 
                 handleCharacterClick(entity.id); 
             };
 
@@ -527,35 +521,30 @@
     }
 
     moveBoatBtn.onclick = () => { 
-        currentHintStep = 0; // 手動で動かしたらヒントをリセット
+        currentHintStep = 0; 
         performBoatMove(); 
     };
 
-    // 1クリックにつき確実に1手だけ進むヒントボタン
     hintBtn.onclick = () => {
         if (isMoving || isGameOver) return;
         
-        // ヒントが最後まで行ったか、手動操作でリセットされている場合は初期化
         if (currentHintStep >= stages[currentStage].solution.length || currentHintStep === 0 && currentState.turn > 1) {
             initGame(); 
             messageEl.innerHTML = "💡 ヒント機能：最初からリセットしました。もう一度押すと1手進みます。";
             return;
         }
-        
         executeHintStep();
     };
 
     function executeHintStep() {
         const move = stages[currentStage].solution[currentHintStep];
         
-        // まず船を空にする
         entities.forEach(e => {
             if (currentState.positions[e.id].startsWith('boat')) {
                 currentState.positions[e.id] = currentState.boatPosition;
             }
         });
 
-        // 正解のキャラを乗せる
         move.forEach((id, index) => {
             currentState.positions[id] = `boat_${index}`;
         });
@@ -564,7 +553,6 @@
         isMoving = true; 
         updateButtonStates();
         
-        // 少し間を置いてから出航（1手だけで必ず止まる）
         setTimeout(() => {
             isMoving = false;
             performBoatMove();
@@ -626,11 +614,9 @@
                 isNight = weatherData[phase].isWerewolf === true;
             }
 
-            // 人狼はキャベツ以外すべて食べる
             if (isNight && hasFarmerB) {
                 if (hasFarmerA) return "人狼が人間Aを食べてしまった！🐺🩸👦";
                 if (hasWolf) return "人狼がオオカミを食べてしまった！🐺🩸🐺";
-                if (hasGoat) return "人狼がヤギを食べてしまった！🐺🩸🐐";
             }
 
             const hasGuard = isNight ? hasFarmerA : (hasFarmerA || hasFarmerB);
