@@ -1,11 +1,9 @@
-
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（4手クリア実装）</title>
+    <title>川渡りパズル 究極版（完全ロジック＆天気機能）</title>
     <style>
         :root {
             --wood-color: #8d6e63;
@@ -20,22 +18,24 @@
             touch-action: manipulation;
         }
 
+        /* 画面崩れを完全に防ぐ固定レイアウト */
         body {
             display: flex;
             flex-direction: column;
             height: 100vh;
-            height: 100dvh;
+            height: 100dvh; /* スマホのツールバー対策 */
             margin: 0;
             overflow: hidden;
+            background-color: #e3f2fd;
             color: #333;
-            transition: background 1.5s ease, color 1.5s ease;
+            transition: background 1s ease;
         }
 
-        /* 昼夜の背景グラデーション */
-        body.phase-morning { background: linear-gradient(to bottom, #87CEEB, #e3f2fd); }
-        body.phase-day { background: linear-gradient(to bottom, #4FC3F7, #bbdefb); }
-        body.phase-evening { background: linear-gradient(to bottom, #FF8A65, #ffcc80); }
-        body.phase-night { background: linear-gradient(to bottom, #1a237e, #0d47a1); color: #fff; }
+        body.weather-morning { background: linear-gradient(to bottom, #87CEEB, #e3f2fd); }
+        body.weather-day { background: linear-gradient(to bottom, #4FC3F7, #bbdefb); }
+        body.weather-evening { background: linear-gradient(to bottom, #FF8A65, #ffcc80); }
+        body.weather-night { background: linear-gradient(to bottom, #2c3e50, #34495e); color: #fff; }
+        body.weather-fullmoon { background: linear-gradient(to bottom, #1a237e, #0d47a1); color: #fff; }
 
         header, .status-bar, #message-area, .bottom-actions {
             flex-shrink: 0;
@@ -43,19 +43,33 @@
         }
 
         header {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.9);
             padding: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             color: #333;
+            position: relative;
+        }
+
+        /* 右上の天気アイコン（ステージ3限定） */
+        #weather-icon {
+            position: absolute;
+            top: 50%;
+            right: 15px;
+            transform: translateY(-50%);
+            font-size: 28px;
+            display: none; /* 初期は非表示 */
+            text-shadow: 0 0 10px rgba(255,255,255,0.8);
+            transition: all 0.5s ease;
         }
 
         .controls {
             display: flex;
             gap: 8px;
             align-items: center;
+            padding-right: 40px; /* 天気アイコン用のスペース */
         }
 
         select, button.top-btn {
@@ -64,9 +78,8 @@
             border: 1px solid #ccc;
             background: #fff;
             font-weight: bold;
-            font-size: 13px;
+            font-size: 12px;
             cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         button:active { transform: translateY(2px); }
@@ -79,90 +92,55 @@
             background: #d32f2f;
             color: white;
             padding: 5px 8px;
-            border-radius: 20px;
+            border-radius: 15px;
             font-weight: bold;
             font-size: 12px;
-            box-shadow: inset 0 0 5px rgba(0,0,0,0.3);
         }
 
         .status-bar {
             text-align: center;
-            padding: 8px;
+            padding: 6px;
             background: rgba(255,255,255,0.7);
             color: #333;
             font-weight: bold;
-            font-size: 16px;
-            backdrop-filter: blur(5px);
-            transition: background 1.5s ease, color 1.5s ease;
+            font-size: 14px;
         }
-        body.phase-night .status-bar {
-            background: rgba(0,0,0,0.5);
+        body.weather-fullmoon .status-bar, body.weather-night .status-bar {
+            background: rgba(0,0,0,0.6);
             color: #ff8a80;
         }
 
+        /* ゲームエリア（自動伸縮・最小高さ0で潰れ防止） */
         #game-area {
             flex-grow: 1;
-            min-height: 0;
+            min-height: 0; 
             display: flex;
             flex-direction: row;
             position: relative;
         }
 
-        #sky-area {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100px;
-            pointer-events: none;
-            z-index: 1;
-            overflow: hidden;
-        }
-        .celestial {
-            position: absolute;
-            font-size: 45px;
-            transition: all 1.5s ease-in-out;
-            opacity: 0;
-            top: 10px;
-        }
-        
-        body.phase-morning #sun { left: 20%; opacity: 1; transform: scale(0.8); }
-        body.phase-day #sun { left: 50%; transform: translateX(-50%) scale(1.2); opacity: 1; }
-        body.phase-evening #sun { left: 80%; opacity: 1; transform: scale(0.9); }
-        body.phase-night #sun { left: 120%; opacity: 0; }
-
-        body.phase-morning #moon, body.phase-day #moon { left: 120%; opacity: 0; }
-        body.phase-evening #moon { left: -20%; opacity: 0; }
-        body.phase-night #moon { left: 50%; transform: translateX(-50%); opacity: 1; text-shadow: 0 0 20px #fff; }
-
-        body.phase-night #game-area::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 30, 0.3);
-            pointer-events: none;
-            z-index: 5;
-        }
-
         .bank {
             width: 25%;
             height: 100%;
-            background: radial-gradient(circle at 50% 50%, rgba(139,195,74,0.9), rgba(85,139,47,0.9));
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.4);
+            background: radial-gradient(circle at 50% 50%, rgba(139,195,74,0.95), rgba(85,139,47,0.95));
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
             display: flex;
             flex-wrap: wrap;
-            align-content: flex-end;
+            align-content: center; /* 中央に配置 */
             justify-content: center;
-            gap: 5px;
-            padding: 20px 5px;
+            gap: 8px;
+            padding: 10px 5px;
             position: relative;
             z-index: 2;
         }
 
-        #left-bank { border-right: 12px solid #795548; }
-        #right-bank { border-left: 12px solid #795548; }
+        #left-bank { border-right: 10px solid #795548; }
+        #right-bank { border-left: 10px solid #795548; }
 
         #river {
             width: 50%;
             height: 100%;
-            background: linear-gradient(to right, rgba(41,182,246,0.7), rgba(129,212,250,0.7), rgba(41,182,246,0.7));
+            background: linear-gradient(to right, rgba(41,182,246,0.8), rgba(129,212,250,0.8), rgba(41,182,246,0.8));
             background-size: 200% 100%;
             animation: flowWater 4s infinite linear;
             position: relative;
@@ -177,30 +155,30 @@
             position: absolute;
             left: 5%;
             width: 80px;
-            height: 160px;
+            height: 150px;
             background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
-            border-radius: 10px;
-            box-shadow: 5px 10px 15px rgba(0,0,0,0.4);
+            border-radius: 8px;
+            box-shadow: 5px 10px 10px rgba(0,0,0,0.4);
             display: flex;
             flex-direction: column;
             justify-content: space-evenly;
             align-items: center;
-            transition: left 0.8s ease-in-out, transform 0.5s ease, filter 0.5s ease;
+            transition: left 0.8s ease-in-out, transform 0.5s ease;
             z-index: 3;
         }
 
         #boat.right-side { left: calc(95% - 80px); }
-        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) translateY(30px); }
+        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) translateY(20px); }
 
         .boat-slot {
-            width: 65px;
-            height: 65px;
+            width: 60px;
+            height: 60px;
             border: 3px dashed rgba(255,255,255,0.8);
             border-radius: 50%;
             display: flex;
             justify-content: center;
             align-items: center;
-            background: rgba(0,0,0,0.15);
+            background: rgba(0,0,0,0.2);
         }
 
         .character {
@@ -209,7 +187,7 @@
             border-radius: 50%;
             background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0);
             border: 3px solid #fff;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             cursor: pointer;
             display: flex;
             justify-content: center;
@@ -222,14 +200,13 @@
             color: #333;
         }
 
-        body.phase-night .character { border-color: #999; }
         .character:active { transform: scale(0.9) translateY(2px); }
         
         .character-name-label {
             position: absolute;
-            bottom: -15px;
+            bottom: -16px;
             font-size: 10px;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             color: white;
             padding: 2px 4px;
             border-radius: 4px;
@@ -239,9 +216,9 @@
         #message-area {
             padding: 10px;
             text-align: center;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             color: #333;
-            min-height: 60px;
+            min-height: 55px;
             font-weight: bold;
             font-size: 14px;
             border-top: 1px solid #ddd;
@@ -253,16 +230,16 @@
         .bottom-actions {
             display: flex;
             gap: 10px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.9);
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.95);
             border-top: 1px solid #ccc;
         }
 
         .bottom-actions button {
-            padding: 18px 5px;
+            padding: 15px 5px;
             font-size: 16px;
             font-weight: bold;
-            border-radius: 30px;
+            border-radius: 25px;
             border: none;
             cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
@@ -275,33 +252,30 @@
 
     </style>
 </head>
-<body class="phase-morning">
+<body class="weather-day">
 
     <header>
         <select id="stage-select">
-            <option value="werewolf">ステージ3：月夜の人狼（究極4手版）</option>
-            <option value="twins">ステージ2：双子（人間2人でショートカット）</option>
-            <option value="classic">ステージ1：基本（狼・ヤギ・キャベツ）</option>
+            <option value="werewolf">ステージ3：月夜の人狼（天気導入）</option>
+            <option value="twins">ステージ2：双子の番人</option>
+            <option value="classic">ステージ1：基本</option>
         </select>
         <div class="controls">
-            <div class="durability-box" id="durability-box">
-                ⛵ 耐久: <span id="durability-value">4</span>
+            <div class="durability-box">
+                ⛵ 耐久: <span id="durability-value">7</span>
             </div>
             <button id="undo-btn" class="top-btn">戻す</button>
             <button id="reset-btn" class="top-btn">リセット</button>
         </div>
+        <!-- 天気アイコン（ステージ3のみ表示） -->
+        <div id="weather-icon">☀️</div>
     </header>
 
     <div class="status-bar" id="status-bar">
-        ターン: 1 | 🌅 朝
+        ターン: 1 | ☀️ 昼
     </div>
 
     <div id="game-area">
-        <div id="sky-area">
-            <div id="sun" class="celestial">☀️</div>
-            <div id="moon" class="celestial">🌙</div>
-        </div>
-        
         <div id="left-bank" class="bank"></div>
         <div id="river">
             <div id="boat">
@@ -322,10 +296,13 @@
     </div>
 
 <script>
+    // -----------------------------------------------------
+    // パズルのロジック定義（全ステージ7手の最適解）
+    // -----------------------------------------------------
     const stages = {
         werewolf: {
-            maxMoves: 4, // 究極の4手でクリア！
-            turnLimit: true, 
+            maxMoves: 7,
+            hasWeather: true, 
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
                 { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
@@ -333,17 +310,20 @@
                 { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
                 { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
             ],
-            // 人狼がキャベツを運ぶ美しい4手ルート
+            // 待機なしで人狼から生き延びる究極の7手ルート
             solution: [
-                ['f1', 'g1'], // 1(朝) A+羊 -> 右
-                ['f1'],       // 2(昼) A <- 左
-                ['f1', 'w1'], // 3(夕) A+狼 -> 右
-                ['f2', 'c1']  // 4(夜) B(人狼)+菜 -> 右 （クリア！）
+                ['f1', 'g1'], // 1(朝): F1+ヤギ -> 右へ
+                ['f1'],       // 2(昼): F1 -> 左へ戻る
+                ['f2', 'w1'], // 3(夕): F2+オオカミ -> 右へ
+                ['f2', 'g1'], // 4(夜): F2+ヤギ -> 左へ戻る
+                ['f1', 'c1'], // 5(満月): F1+キャベツ -> 右へ（※ここで左岸は人狼とヤギになるが、人狼はヤギを食べないため安全！）
+                ['f1'],       // 6(朝): F1 -> 左へ戻る
+                ['f1', 'g1']  // 7(昼): F1+ヤギ -> 右へ（クリア！）
             ]
         },
         twins: {
-            maxMoves: 4, // 人間が2人いれば4手で終わる！
-            turnLimit: false,
+            maxMoves: 7,
+            hasWeather: false,
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
                 { id: 'f2', type: 'farmer', name: '人間B', icon: '👱‍♂️', canDrive: true },
@@ -351,16 +331,11 @@
                 { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
                 { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
             ],
-            solution: [
-                ['f1', 'g1'], // 1. A+羊 -> 右
-                ['f1'],       // 2. A <- 左
-                ['f1', 'w1'], // 3. A+狼 -> 右
-                ['f2', 'c1']  // 4. B+菜 -> 右 （クリア！）
-            ]
+            solution: [ ['f1', 'g1'], ['f1'], ['f2', 'w1'], ['f2', 'g1'], ['f1', 'c1'], ['f1'], ['f1', 'g1'] ]
         },
         classic: {
-            maxMoves: 7, // 基本は7手
-            turnLimit: false,
+            maxMoves: 7,
+            hasWeather: false,
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間', icon: '👦', canDrive: true },
                 { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
@@ -371,8 +346,16 @@
         }
     };
 
-    const phaseNames = ['🌅 朝', '☀️ 昼', '🌇 夕', '🌕 夜'];
-    const phaseClasses = ['phase-morning', 'phase-day', 'phase-evening', 'phase-night'];
+    // 天気フェーズ定義（ステージ3専用）
+    const weatherData = {
+        1: { name: '🌅 朝', class: 'weather-morning', icon: '🌅' },
+        2: { name: '☀️ 昼', class: 'weather-day', icon: '☀️' },
+        3: { name: '🌇 夕方', class: 'weather-evening', icon: '🌇' },
+        4: { name: '🌃 夜', class: 'weather-night', icon: '🌙' },
+        5: { name: '🌕 満月', class: 'weather-fullmoon', icon: '🌕', isWerewolf: true }, // 第5ターンのみ人狼化
+        6: { name: '🌅 朝', class: 'weather-morning', icon: '🌅' },
+        7: { name: '☀️ 昼', class: 'weather-day', icon: '☀️' }
+    };
 
     let currentStage = 'werewolf';
     let entities = [];
@@ -390,6 +373,7 @@
     const messageEl = document.getElementById('message-area');
     const statusBarEl = document.getElementById('status-bar');
     const durabilityEl = document.getElementById('durability-value');
+    const weatherIconEl = document.getElementById('weather-icon');
     const undoBtn = document.getElementById('undo-btn');
     const moveBoatBtn = document.getElementById('move-boat-btn');
     const hintBtn = document.getElementById('hint-btn');
@@ -418,6 +402,8 @@
         messageEl.innerHTML = 'アイコンをタップして乗せ、「動かす」を押してください。';
         messageEl.className = '';
         
+        weatherIconEl.style.display = stageData.hasWeather ? 'block' : 'none';
+        
         updateButtonStates();
         render();
     }
@@ -430,17 +416,21 @@
 
         durabilityEl.innerText = currentState.durability;
 
-        let phase = 0;
-        if (stages[currentStage].turnLimit) {
-            phase = (currentState.turn - 1) % 4;
-            document.body.className = phaseClasses[phase];
-            statusBarEl.innerHTML = `ターン: ${currentState.turn} | ${phaseNames[phase]} ` + (phase === 3 ? '(人間Bが人狼化!)' : '');
-        } else {
-            document.body.className = phaseClasses[0];
-            statusBarEl.innerHTML = `ターン: ${currentState.turn} | ☀️️ 昼`;
-        }
-        let isNight = (phase === 3);
+        let isNight = false;
 
+        // 天気・背景の更新
+        if (stages[currentStage].hasWeather) {
+            const wInfo = weatherData[currentState.turn] || weatherData[7];
+            document.body.className = wInfo.class;
+            weatherIconEl.innerText = wInfo.icon;
+            isNight = wInfo.isWerewolf === true;
+            statusBarEl.innerHTML = `ターン: ${currentState.turn} | ${wInfo.name} ` + (isNight ? '(人間Bが人狼化!)' : '');
+        } else {
+            document.body.className = 'weather-day';
+            statusBarEl.innerHTML = `ターン: ${currentState.turn} | ☀️ 昼`;
+        }
+
+        // キャラクター描画
         entities.forEach(entity => {
             const el = document.createElement('div');
             el.className = 'character';
@@ -452,6 +442,7 @@
                 displayIcon = '🐺';
                 displayName = '人狼';
                 el.style.color = '#ff5252';
+                el.style.borderColor = '#ff5252';
             }
             
             el.innerHTML = `${displayIcon}<div class="character-name-label">${displayName}</div>`;
@@ -459,7 +450,7 @@
             if (!isGameOver && !isMoving) {
                 el.onclick = (e) => { 
                     e.stopPropagation(); 
-                    isHintMode = false; 
+                    isHintMode = false; // 手動操作でヒント解除
                     handleCharacterClick(entity.id); 
                 };
             }
@@ -480,7 +471,7 @@
         const pos = currentState.positions[id];
         
         if (pos.startsWith('boat')) {
-            currentState.positions[id] = currentState.boatPosition;
+            currentState.positions[id] = currentState.boatPosition; // 船から降ろす
         } else if (pos === currentState.boatPosition) {
             const values = Object.values(currentState.positions);
             if (!values.includes('boat_0')) currentState.positions[id] = 'boat_0';
@@ -510,21 +501,28 @@
         updateButtonStates();
         render(); 
 
+        // アニメーション完了後に判定
         setTimeout(() => {
             entities.forEach(e => {
                 if (currentState.positions[e.id].startsWith('boat')) {
-                    currentState.positions[e.id] = currentState.boatPosition;
+                    currentState.positions[e.id] = currentState.boatPosition; // 自動降車
                 }
             });
             isMoving = false; 
             render(); 
             checkRules();
             updateButtonStates();
-        }, 800);
+            
+            // ヒント自動進行の連続発火
+            if (isHintMode && !isGameOver) {
+                setTimeout(executeHintStep, 600);
+            }
+        }, 850);
     }
 
     moveBoatBtn.onclick = () => { isHintMode = false; performBoatMove(); };
 
+    // ヒントボタンのロジック（自動進行）
     hintBtn.onclick = () => {
         if (isMoving || isGameOver) return;
         
@@ -539,27 +537,35 @@
     };
 
     function executeHintStep() {
+        if (isGameOver) {
+            isHintMode = false;
+            return;
+        }
+
         const move = stages[currentStage].solution[currentHintStep];
         
+        // 船を空にする
         entities.forEach(e => {
             if (currentState.positions[e.id].startsWith('boat')) {
                 currentState.positions[e.id] = currentState.boatPosition;
             }
         });
 
+        // 正解のキャラを乗せる
         move.forEach((id, index) => {
             currentState.positions[id] = `boat_${index}`;
         });
         
         render();
-        isMoving = true;
+        isMoving = true; // 操作ロック
         updateButtonStates();
         
+        // 少し間を置いてから出航
         setTimeout(() => {
             isMoving = false;
             performBoatMove();
             currentHintStep++;
-        }, 400);
+        }, 600);
     }
 
     function updateButtonStates() {
@@ -576,6 +582,7 @@
             currentState = state.pop();
             isGameOver = false;
             isHintMode = false; 
+            currentHintStep = Math.max(0, currentHintStep - 1);
             boatEl.classList.remove('broken');
             messageEl.innerHTML = "一手戻しました。";
             messageEl.className = "";
@@ -587,6 +594,7 @@
     function checkRules() {
         const allRight = entities.every(e => currentState.positions[e.id] === 'right');
         
+        // クリア判定
         if (allRight) {
             if (currentState.durability < 0) {
                 showMessage("🎉 全員無事に到着！<br>（イカダは沈没しましたが劇的クリアです！）", "success");
@@ -599,6 +607,7 @@
             return;
         }
 
+        // 食物連鎖判定
         const checkBank = (bankName) => {
             const inBank = entities.filter(e => {
                 const p = currentState.positions[e.id];
@@ -612,14 +621,15 @@
             const hasCabbage = inBank.some(e => e.id === 'c1');
             
             let isNight = false;
-            if (stages[currentStage].turnLimit) {
-                isNight = ((currentState.turn - 1) % 4 === 3);
+            if (stages[currentStage].hasWeather) {
+                isNight = weatherData[currentState.turn]?.isWerewolf === true;
             }
 
+            // 【裏ルール】人狼は人間とオオカミを食べるが、ヤギの臭いが嫌いで食べない！
             if (isNight && hasFarmerB) {
                 if (hasFarmerA) return "人狼が人間Aを食べてしまった！🐺🩸👦";
                 if (hasWolf) return "人狼がオオカミを食べてしまった！🐺🩸🐺";
-                if (hasGoat) return "人狼がヤギを食べてしまった！🐺🩸🐐";
+                // ヤギ(G)とキャベツ(C)は無視する
             }
 
             const hasGuard = isNight ? hasFarmerA : (hasFarmerA || hasFarmerB);
@@ -642,13 +652,14 @@
             return;
         }
 
+        // 耐久値オーバー
         if (currentState.durability < 0) {
             showMessage("💥 耐久値が尽きて沈没した！ゲームオーバー！", "game-over");
             isGameOver = true;
             isHintMode = false;
             boatEl.classList.add('broken');
         } else {
-            if (isHintMode) messageEl.innerHTML = "ヒント自動進行中...（連打で次へ）";
+            if (isHintMode) messageEl.innerHTML = "💡 ヒント自動進行中...";
             else messageEl.innerHTML = "無事に到着しました。（残り耐久値：" + currentState.durability + "）";
             messageEl.className = "";
         }
@@ -666,8 +677,8 @@
     document.getElementById('reset-btn').addEventListener('click', () => initGame(true));
     document.getElementById('undo-btn').addEventListener('click', undo);
 
+    // 起動
     initGame(true);
 </script>
 </body>
 </html>
-
