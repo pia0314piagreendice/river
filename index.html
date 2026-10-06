@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（レイアウト完全中央揃え・完成版）</title>
+    <title>川渡りパズル</title>
     <style>
         :root {
             --wood-color: #8d6e63;
@@ -15,34 +15,42 @@
             margin: 0;
             padding: 0;
             font-family: 'Helvetica Neue', Arial, sans-serif;
-            touch-action: manipulation;
+            touch-action: manipulation; /* スマホでのタップ遅延を無効化 */
         }
 
-        /* 画面崩れを防ぐ固定レイアウト */
-        body {
+        /* 外側の画面全体（PC時は背景を暗くし、中央に配置） */
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: #222;
             display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-            min-height: 100dvh;
+            justify-content: center;
+            align-items: center;
             margin: 0;
-            overflow-x: hidden;
+            overflow: hidden;
+        }
+
+        /* アプリ本体のコンテナ（CSS Gridで高さを厳密に5分割） */
+        #app-container {
+            width: 100%;
+            max-width: 600px; /* PCでは幅600pxに制限 */
+            height: 100%;
+            max-height: 100dvh; /* スマホのバーを除いた正確な高さ */
+            display: grid;
+            grid-template-rows: auto auto 1fr auto auto; /* ヘッダー、ステータス、ゲーム領域(残り全て)、メッセージ、ボタン */
             background-color: #e3f2fd;
-            color: #333;
-            transition: background 0.8s ease, color 0.8s ease;
-        }
-
-        /* 天気フェーズの背景色設定 */
-        body.weather-morning { background: #87CEEB; }
-        body.weather-day { background: #4FC3F7; }
-        body.weather-evening { background: #FF8A65; }
-        body.weather-night { background: #2c3e50; color: #fff; }
-        body.weather-fullmoon { background: #1a237e; color: #fff; }
-
-        header, .status-bar, #message-area, .bottom-actions {
-            flex-shrink: 0;
-            z-index: 20;
+            transition: background-color 0.5s ease;
             position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
+
+        /* 天気による背景色（アプリコンテナに適用） */
+        #app-container.weather-morning { background-color: #87CEEB; }
+        #app-container.weather-day { background-color: #4FC3F7; }
+        #app-container.weather-evening { background-color: #FF8A65; }
+        #app-container.weather-night { background-color: #2c3e50; color: #fff; }
+        #app-container.weather-fullmoon { background-color: #1a237e; color: #fff; }
 
         header {
             background: rgba(255, 255, 255, 0.95);
@@ -52,6 +60,8 @@
             align-items: center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             color: #333;
+            z-index: 20;
+            position: relative;
         }
 
         #weather-icon {
@@ -103,64 +113,57 @@
             color: #333;
             font-weight: bold;
             font-size: 14px;
+            z-index: 20;
         }
-        body.weather-fullmoon .status-bar, body.weather-night .status-bar {
+        #app-container.weather-fullmoon .status-bar, 
+        #app-container.weather-night .status-bar {
             background: rgba(0,0,0,0.7);
             color: #ff8a80;
         }
 
-        /* ゲームエリア（自動伸縮・最小高さ0でUIのはみ出しを防止） */
+        /* ▼▼▼ ゲーム領域（絶対に上に張り付かない堅牢なグリッド構造） ▼▼▼ */
         #game-area {
-            flex: 1; /* flex-grow: 1 */
-            min-height: 250px; 
-            display: flex;
-            flex-direction: row;
+            display: grid;
+            grid-template-columns: 25% 50% 25%; /* 左岸・川・右岸 */
+            width: 100%;
+            height: 100%; /* Gridの1frを確実に継承 */
+            min-height: 0; 
             position: relative;
             z-index: 1;
-            overflow: hidden;
         }
 
         .bank {
-            width: 25%;
-            height: 100%;
-            background: radial-gradient(circle at 50% 50%, rgba(139,195,74,0.95), rgba(85,139,47,0.95));
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
             display: flex;
             flex-wrap: wrap;
-            /* ★修正箇所：キャラクターを完全に縦横中央に揃える設定 */
-            align-items: center;   /* 一列の場合の縦中央 */
-            align-content: center; /* 複数列になった場合の縦中央 */
             justify-content: center;
+            align-items: center; /* 縦横の完全な中央揃え */
+            align-content: center;
             gap: 8px;
+            background: radial-gradient(circle at 50% 50%, rgba(139,195,74,0.95), rgba(85,139,47,0.95));
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
             padding: 10px 5px;
             position: relative;
             z-index: 2;
         }
-
         #left-bank { border-right: 10px solid #795548; }
         #right-bank { border-left: 10px solid #795548; }
 
         #river {
-            width: 50%;
-            height: 100%;
             background: linear-gradient(to right, rgba(41,182,246,0.8), rgba(129,212,250,0.8), rgba(41,182,246,0.8));
             background-size: 200% 100%;
             animation: flowWater 4s infinite linear;
             position: relative;
             display: flex;
-            align-items: center;
+            align-items: center; /* 川の中央にイカダを配置する基盤 */
             z-index: 1;
         }
-
         @keyframes flowWater { 100% { background-position: 100% 0; } }
 
         #boat {
             position: absolute;
             left: 5%;
-            /* ★修正箇所：イカダを常に画面の縦中央に固定する */
             top: 50%;
-            margin-top: -75px; /* 高さ(150px)の半分上にずらすことで完璧な中央に */
-            
+            transform: translateY(-50%); /* これで絶対に縦のド真ん中に配置される */
             width: 80px;
             height: 150px;
             background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
@@ -170,12 +173,12 @@
             flex-direction: column;
             justify-content: space-evenly;
             align-items: center;
-            transition: left 0.8s ease-in-out, transform 0.5s ease;
+            transition: left 0.8s ease-in-out;
             z-index: 3;
         }
 
         #boat.right-side { left: calc(95% - 80px); }
-        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) translateY(20px); }
+        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: translateY(-50%) rotate(15deg); }
 
         .boat-slot {
             width: 60px;
@@ -199,142 +202,4 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 30px;
-            transition: transform 0.2s;
-            position: relative;
-            z-index: 10;
-            user-select: none;
-            color: #333;
-        }
-
-        .character:active { transform: scale(0.9) translateY(2px); }
-        
-        .character-name-label {
-            position: absolute;
-            bottom: -16px;
-            font-size: 10px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 2px 4px;
-            border-radius: 4px;
-            white-space: nowrap;
-        }
-
-        #message-area {
-            padding: 10px;
-            text-align: center;
-            background: rgba(255, 255, 255, 0.95);
-            color: #333;
-            min-height: 60px;
-            font-weight: bold;
-            font-size: 14px;
-            border-top: 1px solid #ddd;
-        }
-
-        .game-over { color: #d32f2f !important; }
-        .success { color: #2e7d32 !important; }
-
-        .bottom-actions {
-            display: flex;
-            gap: 10px;
-            padding: 12px;
-            /* iPhoneのホームバーなどのセーフエリアを回避 */
-            padding-bottom: max(12px, env(safe-area-inset-bottom));
-            background: rgba(255, 255, 255, 0.95);
-            border-top: 1px solid #ccc;
-        }
-
-        .bottom-actions button {
-            padding: 15px 5px;
-            font-size: 16px;
-            font-weight: bold;
-            border-radius: 25px;
-            border: none;
-            cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: transform 0.1s;
-            flex: 1;
-            position: relative;
-            z-index: 25;
-        }
-
-        #hint-btn { background: #ffc107; color: #333; }
-        #move-boat-btn { background: #2196f3; color: white; flex: 2; }
-
-        /* PC等、画面が広い場合は横幅を制限して見やすくする */
-        @media (min-width: 800px) {
-            body { background-color: #333; align-items: center; }
-            header, .status-bar, #game-area, #message-area, .bottom-actions {
-                width: 100%; max-width: 600px; margin: 0 auto;
-            }
-        }
-    </style>
-</head>
-<body class="weather-day">
-
-    <header>
-        <select id="stage-select">
-            <option value="werewolf">ステージ3：月夜の人狼（全9手・完全論理）</option>
-            <option value="twins">ステージ2：双子の番人（全7手）</option>
-            <option value="classic">ステージ1：基本（全7手）</option>
-        </select>
-        <div class="controls">
-            <div class="durability-box">
-                ⛵ 耐久: <span id="durability-value">9</span>
-            </div>
-            <button id="undo-btn" class="top-btn">戻す</button>
-            <button id="reset-btn" class="top-btn">リセット</button>
-        </div>
-        <div id="weather-icon">☀️</div>
-    </header>
-
-    <div class="status-bar" id="status-bar">
-        ターン: 1 | ☀️ 昼
-    </div>
-
-    <div id="game-area">
-        <div id="left-bank" class="bank"></div>
-        <div id="river">
-            <div id="boat">
-                <div class="boat-slot" id="slot-0"></div>
-                <div class="boat-slot" id="slot-1"></div>
-            </div>
-        </div>
-        <div id="right-bank" class="bank"></div>
-    </div>
-
-    <div id="message-area">
-        アイコンをタップして乗せ、「動かす」を押してください。
-    </div>
-
-    <div class="bottom-actions">
-        <button id="hint-btn">💡 1手ヒント</button>
-        <button id="move-boat-btn">🚢 動かす</button>
-    </div>
-
-<script>
-    // -----------------------------------------------------
-    // パズルのロジック定義（数学的検証済みの完璧な解答）
-    // -----------------------------------------------------
-    const stages = {
-        werewolf: {
-            maxMoves: 9, 
-            hasWeather: true, 
-            entities: [
-                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
-                { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
-                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
-                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
-                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
-            ],
-            solution: [
-                ['f2', 'g1'], // 1(朝): B+ヤギ -> 右 (左: A,狼,菜 / 右: B,ヤギ)
-                ['f2'],       // 2(昼): B <- 左 (左: A,B,狼,菜 / 右: ヤギ)
-                ['f1', 'f2'], // 3(夕): A+B -> 右 (左: 狼,菜 / 右: A,B,ヤギ)
-                ['f1', 'g1'], // 4(夜): A+ヤギ <- 左 (左: A,狼,ヤギ,菜 / 右: B)
-                ['f1', 'g1'], // 5(満月): A+ヤギ -> 右 (到着すると朝になり、Bは人間に戻る)
-                ['f1'],       // 6(朝): A <- 左
-                ['f1', 'w1'], // 7(昼): A+狼 -> 右 
-                ['f2'],       // 8(夕): B <- 左
-                ['f2', 'c1']  // 9(夜): B+菜 -> 右 （全員クリア！）
-            ]
+            font-size: 30px
