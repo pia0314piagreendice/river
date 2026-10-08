@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（移動中変身・ロングリバー実装）</title>
+    <title>川渡りパズル 究極版（ロングリバー＆移動中変身）</title>
     <style>
         :root {
             --wood-color: #8d6e63;
             --wood-dark: #5d4037;
+            --transition-speed-normal: 0.8s;
+            --transition-speed-long: 2s; /* ロングリバーの片道分の時間 */
         }
 
         * {
@@ -18,13 +20,12 @@
             touch-action: manipulation;
         }
 
-        /* 画面崩れや真っ黒を絶対に防ぐ最強の基盤レイアウト */
         html, body {
             width: 100%;
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: #87CEEB; 
+            background-color: #2c3e50; 
         }
 
         body {
@@ -35,28 +36,22 @@
 
         #app-container {
             width: 100%;
+            max-width: 600px;
             height: 100%;
-            max-width: 600px; 
             display: flex;
             flex-direction: column;
             position: relative;
             background-color: #e3f2fd;
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0,0,0,0.3);
-            /* ステージ1・2の基本背景遷移 */
-            transition: background-color 0.8s ease;
-        }
-
-        /* ステージ3（ロングリバー）の時は背景もゆっくり4秒で変わる */
-        #app-container.stage3 {
-            transition: background-color 4s linear;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            transition: background-color 1.5s ease;
         }
 
         /* 天気フェーズの背景色 */
         #app-container.weather-morning { background-color: #87CEEB; }
         #app-container.weather-day { background-color: #4FC3F7; }
         #app-container.weather-evening { background-color: #FF8A65; }
-        #app-container.weather-night { background-color: #2c3e50; color: #fff; }
+        #app-container.weather-night { background-color: #1a237e; color: #fff; }
 
         header {
             background: rgba(255, 255, 255, 0.95);
@@ -126,23 +121,36 @@
             font-size: 14px;
             flex-shrink: 0;
             z-index: 20;
-            transition: all 0.5s ease;
+            transition: background-color 1.5s ease;
         }
         #app-container.weather-night .status-bar {
             background: rgba(0,0,0,0.7);
             color: #ff8a80;
         }
 
+        /* ゲーム領域 */
         #game-area {
             flex-grow: 1;
-            display: flex;
-            flex-direction: row;
             position: relative;
             z-index: 1;
+            overflow: hidden;
         }
 
+        #river {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, rgba(41,182,246,0.8), rgba(129,212,250,0.8), rgba(41,182,246,0.8));
+            background-size: 200% 100%;
+            animation: flowWater 4s infinite linear;
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 1;
+        }
+        @keyframes flowWater { 100% { background-position: 100% 0; } }
+
+        /* 岸の共通設定 */
         .bank {
-            width: 25%;
+            width: 30%;
             height: 100%;
             background: radial-gradient(circle at 50% 50%, rgba(139,195,74,0.95), rgba(85,139,47,0.95));
             box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
@@ -152,36 +160,16 @@
             justify-content: center;
             gap: 8px;
             padding: 10px 5px;
-            position: relative;
+            position: absolute;
+            top: 0;
             z-index: 2;
-            transition: opacity 0.8s ease-in-out;
+            transition: transform var(--transition-speed-normal) ease-in-out;
         }
-        #app-container.stage3 .bank {
-            transition: opacity 4s linear; /* ステージ3は岸が見えるまで時間がかかる */
-        }
-        
-        .hidden-bank {
-            opacity: 0 !important;
-            pointer-events: none;
-        }
-
-        #left-bank { border-right: 10px solid #795548; }
-        #right-bank { border-left: 10px solid #795548; }
-
-        #river {
-            width: 50%;
-            height: 100%;
-            background: linear-gradient(to right, rgba(41,182,246,0.8), rgba(129,212,250,0.8), rgba(41,182,246,0.8));
-            background-size: 200% 100%;
-            animation: flowWater 4s infinite linear;
-            position: relative;
-            z-index: 1;
-        }
-        @keyframes flowWater { 100% { background-position: 100% 0; } }
+        #left-bank { left: 0; border-right: 10px solid #795548; transform: translateX(0); }
+        #right-bank { right: 0; border-left: 10px solid #795548; transform: translateX(0); }
 
         #boat {
             position: absolute;
-            left: 5%;
             top: 50%;
             margin-top: -75px; 
             width: 80px;
@@ -193,16 +181,42 @@
             flex-direction: column;
             justify-content: space-evenly;
             align-items: center;
-            transition: left 0.8s ease-in-out;
             z-index: 3;
-        }
-        /* ステージ3の1/5倍速のゆっくりした移動 */
-        #app-container.stage3 #boat {
-            transition: left 4s linear;
+            transition: left var(--transition-speed-normal) ease-in-out, transform var(--transition-speed-normal) ease-in-out;
         }
 
-        #boat.right-side { left: calc(95% - 80px); }
-        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg); }
+        /* -----------------------------------------------------
+           ステージ1・2用（通常の移動）
+        ----------------------------------------------------- */
+        #app-container:not(.stage3) #boat.at-left { left: 30%; transform: translateX(0); }
+        #app-container:not(.stage3) #boat.at-right { left: 70%; transform: translateX(-100%); }
+
+        /* -----------------------------------------------------
+           ステージ3用（ロングリバー・物理的移動演出）
+        ----------------------------------------------------- */
+        #app-container.stage3 .bank {
+            transition: transform var(--transition-speed-long) linear;
+        }
+        #app-container.stage3 #boat {
+            transition: left var(--transition-speed-long) linear, transform var(--transition-speed-long) linear;
+        }
+        
+        /* 状態：左岸にいる */
+        #app-container.stage3.pos-left #left-bank { transform: translateX(0); }
+        #app-container.stage3.pos-left #right-bank { transform: translateX(100%); } /* 右岸は見えない */
+        #app-container.stage3.pos-left #boat { left: 30%; transform: translateX(0); }
+        
+        /* 状態：川の中央（移動中） */
+        #app-container.stage3.pos-center #left-bank { transform: translateX(-100%); } /* 左岸が消える */
+        #app-container.stage3.pos-center #right-bank { transform: translateX(100%); } /* 右岸もまだ見えない */
+        #app-container.stage3.pos-center #boat { left: 50%; transform: translateX(-50%); }
+        
+        /* 状態：右岸にいる */
+        #app-container.stage3.pos-right #left-bank { transform: translateX(-100%); } /* 左岸は見えない */
+        #app-container.stage3.pos-right #right-bank { transform: translateX(0); }
+        #app-container.stage3.pos-right #boat { left: 70%; transform: translateX(-100%); }
+
+        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg) !important; }
 
         .boat-slot {
             width: 60px;
@@ -342,7 +356,7 @@
 </head>
 <body>
 
-<div id="app-container" class="weather-day">
+<div id="app-container" class="weather-day pos-left">
     <header>
         <div class="header-top">
             <div class="durability-box">
@@ -364,7 +378,7 @@
     <div id="game-area">
         <div id="left-bank" class="bank"></div>
         <div id="river">
-            <div id="boat">
+            <div id="boat" class="at-left">
                 <div class="boat-slot" id="slot-0"></div>
                 <div class="boat-slot" id="slot-1"></div>
             </div>
@@ -419,17 +433,23 @@
             solution: [ ['f1', 'g1'], ['f1'], ['f1', 'f2'], ['f1'], ['f1', 'w1'], ['f2'], ['f2', 'c1'] ]
         },
         werewolf: {
-            maxMoves: 3, // 生き物を絞った究極の3手ロジック
+            maxMoves: 7, 
             hasWeather: true, 
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
                 { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
-                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false }
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
             ],
+            // スタート時間を「夜」からにすることで矛盾をゼロにした奇跡の7手
             solution: [
-                ['f1', 'g1'], // 1(夕方->夜): A+ヤギを右へ。到着時に夜になりBが左岸で人狼化するが一人なので安全。
-                ['f1'],       // 2(夜->朝): Aが左へ戻る。到着すると朝になり、Bは人間に戻る！
-                ['f1', 'f2']  // 3(朝->昼): A+Bで右へ。平和な昼に全員到着してクリア！
+                ['f1', 'g1'], // 1(夜): A+ヤギ -> 右 (移動中に朝になるのでBも安全)
+                ['f1'],       // 2(朝): A <- 左
+                ['f1', 'f2'], // 3(昼): A+B -> 右 
+                ['f1', 'g1'], // 4(夕): A+ヤギ <- 左 (移動中に夜になりBが人狼化。右岸にはB単独なので安全)
+                ['f1', 'c1'], // 5(夜): A+菜 -> 右 (移動中に朝になりBは人間に戻る！)
+                ['f1'],       // 6(朝): A <- 左 
+                ['f1', 'g1']  // 7(昼): A+ヤギ -> 右 (全員無事到着でクリア！)
             ]
         }
     };
@@ -437,12 +457,12 @@
     const stageOrder = ['classic', 'twins', 'werewolf'];
     let currentStageIndex = 0;
 
-    // ステージ3専用の4フェーズループ（夕方スタート）
+    // ステージ3専用：4フェーズループ（夜スタート）
     const weatherData = {
-        0: { name: '🌇 夕方', class: 'weather-evening', icon: '🌇', isWerewolf: false },
-        1: { name: '🌃 夜', class: 'weather-night', icon: '🌙', isWerewolf: true },
-        2: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false },
-        3: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false }
+        0: { name: '🌃 夜', class: 'weather-night', icon: '🌕', isWerewolf: true },   // 出発時
+        1: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false }, // 到着時
+        2: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false },
+        3: { name: '🌇 夕方', class: 'weather-evening', icon: '🌇', isWerewolf: false }
     };
 
     let entities = [];
@@ -451,7 +471,8 @@
     let isGameOver = false;
     let isMoving = false; 
     let currentHintStep = 0;
-    let isWerewolfForm = false; // 表示用の人狼化フラグ
+    let isWerewolfForm = false; // 現在のBの見た目フラグ
+    let currentPhaseIndex = 0;
 
     const appEl = document.getElementById('app-container');
     const leftBankEl = document.getElementById('left-bank');
@@ -484,21 +505,28 @@
         
         isGameOver = false;
         isMoving = false;
-        isWerewolfForm = false;
         if (resetHint) currentHintStep = 0;
         
-        boatEl.classList.remove('right-side', 'broken');
+        boatEl.classList.remove('broken');
         clearModal.classList.remove('show');
         messageEl.innerHTML = 'アイコンをタップして乗せ、「動かす」を押してください。';
         messageEl.className = '';
         
         weatherIconEl.style.display = stageData.hasWeather ? 'block' : 'none';
         
-        if (currentStageKey === 'werewolf') {
+        if (stageData.hasWeather) {
             appEl.classList.add('stage3');
+            currentPhaseIndex = 0; // 夜スタート
+            isWerewolfForm = weatherData[currentPhaseIndex].isWerewolf;
         } else {
             appEl.classList.remove('stage3');
+            isWerewolfForm = false;
         }
+        
+        // 岸の初期位置
+        appEl.classList.remove('pos-center', 'pos-right');
+        appEl.classList.add('pos-left');
+        boatEl.className = 'at-left';
         
         updateButtonStates();
         render();
@@ -517,27 +545,16 @@
 
         // 天気・背景の更新
         if (stageData.hasWeather) {
-            const phase = (currentState.turn - 1) % 4;
-            const wInfo = weatherData[phase];
+            const wInfo = weatherData[currentPhaseIndex];
             
-            // クラスの付け替え（stage3クラスは維持する）
-            appEl.className = `${wInfo.class} stage3`; 
+            // クラスの付け替え
+            appEl.className = `${wInfo.class} stage3 ${appEl.classList.contains('pos-left') ? 'pos-left' : appEl.classList.contains('pos-right') ? 'pos-right' : 'pos-center'}`; 
             weatherIconEl.innerText = wInfo.icon;
             statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ${wInfo.name}` + (isWerewolfForm ? ' <span style="color:#ff5252;">(人狼化中!)</span>' : '');
             
-            // 向こう岸を見えなくする演出
-            if (currentState.boatPosition === 'left') {
-                leftBankEl.classList.remove('hidden-bank');
-                rightBankEl.classList.add('hidden-bank');
-            } else {
-                leftBankEl.classList.add('hidden-bank');
-                rightBankEl.classList.remove('hidden-bank');
-            }
         } else {
-            appEl.className = 'weather-day';
+            appEl.className = `weather-day ${appEl.classList.contains('pos-left') ? 'pos-left' : appEl.classList.contains('pos-right') ? 'pos-right' : 'pos-center'}`;
             statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ☀️ 昼`;
-            leftBankEl.classList.remove('hidden-bank');
-            rightBankEl.classList.remove('hidden-bank');
         }
 
         entities.forEach(entity => {
@@ -569,9 +586,6 @@
             else if (pos === 'boat_0') boatSlotsEl[0].appendChild(el);
             else if (pos === 'boat_1') boatSlotsEl[1].appendChild(el);
         });
-
-        if (currentState.boatPosition === 'right') boatEl.classList.add('right-side');
-        else boatEl.classList.remove('right-side');
     }
 
     function handleCharacterClick(id) {
@@ -600,41 +614,75 @@
         }
 
         saveState();
+        const startPosition = currentState.boatPosition;
         currentState.boatPosition = (currentState.boatPosition === 'left') ? 'right' : 'left';
-        currentState.turn++;
-        currentState.durability--;
         
         isMoving = true;
         updateButtonStates();
         
         const currentStageKey = stageOrder[currentStageIndex];
         const stageData = stages[currentStageKey];
-        const duration = stageData.hasWeather ? 4000 : 800;
-
-        render(); // 出航。背景や岸のCSSアニメーションがスタートする
-
-        // ステージ3：移動の中間地点（2秒後）で姿が変身する演出！
+        
         if (stageData.hasWeather) {
-            const nextPhase = (currentState.turn - 1) % 4;
-            const willBeNight = weatherData[nextPhase].isWerewolf;
+            // ▼▼▼ ステージ3：ロングリバー演出 ▼▼▼
+            // 出発：船が川の中央へ、元の岸が消える
+            appEl.classList.remove('pos-left', 'pos-right');
+            appEl.classList.add('pos-center');
             
+            // 川のど真ん中（2秒後）で時間が進み、天気が変わり、変身する！
             setTimeout(() => {
-                isWerewolfForm = willBeNight;
-                render(); // 変身を画面に反映
-            }, duration / 2);
-        }
-
-        setTimeout(() => {
-            entities.forEach(e => {
-                if (currentState.positions[e.id].startsWith('boat')) {
-                    currentState.positions[e.id] = currentState.boatPosition; 
+                currentPhaseIndex = (currentPhaseIndex + 1) % 4;
+                isWerewolfForm = weatherData[currentPhaseIndex].isWerewolf;
+                render(); // 天気と変身を反映
+                
+                // 変身後、船上で食われるかのチェック
+                if (isWerewolfForm) {
+                    const boatHasFarmerA = onBoat.some(e => e.id === 'f1');
+                    const boatHasFarmerB = onBoat.some(e => e.id === 'f2');
+                    if (boatHasFarmerB && boatHasFarmerA) {
+                        showMessage("💀 ゲームオーバー！<br>船の上で変身し、人間Aを食べてしまった！🐺🩸👦", "game-over");
+                        isGameOver = true;
+                        updateButtonStates();
+                        return; // ここで止める
+                    }
                 }
-            });
-            isMoving = false; 
-            render(); 
-            checkRules();
-            updateButtonStates();
-        }, duration);
+                
+                // そのまま到着岸へ進む（さらに2秒）
+                setTimeout(() => {
+                    if(isGameOver) return; // 船上で食われていたら無視
+                    
+                    appEl.classList.remove('pos-center');
+                    appEl.classList.add(currentState.boatPosition === 'left' ? 'pos-left' : 'pos-right');
+                    
+                    setTimeout(() => {
+                        finalizeMove();
+                    }, 2000); // 岸が現れるまで待つ
+                }, 2000);
+                
+            }, 2000);
+            
+        } else {
+            // ▼▼▼ ステージ1・2：通常の移動 ▼▼▼
+            boatEl.className = currentState.boatPosition === 'left' ? 'at-left' : 'at-right';
+            setTimeout(() => {
+                finalizeMove();
+            }, 800);
+        }
+    }
+
+    function finalizeMove() {
+        currentState.turn++;
+        currentState.durability--;
+        
+        entities.forEach(e => {
+            if (currentState.positions[e.id].startsWith('boat')) {
+                currentState.positions[e.id] = currentState.boatPosition; 
+            }
+        });
+        isMoving = false; 
+        render(); 
+        checkRules();
+        updateButtonStates();
     }
 
     moveBoatBtn.onclick = () => { 
@@ -667,14 +715,8 @@
         });
         
         render();
-        isMoving = true; 
-        updateButtonStates();
-        
-        setTimeout(() => {
-            isMoving = false;
-            performBoatMove();
-            currentHintStep++;
-        }, 600);
+        currentHintStep++;
+        performBoatMove(); // 移動処理へ
     };
 
     function updateButtonStates() {
@@ -684,23 +726,30 @@
         hintBtn.disabled = isMoving; 
     }
 
-    function saveState() { state.push(JSON.parse(JSON.stringify(currentState))); }
+    function saveState() { state.push({
+        state: JSON.parse(JSON.stringify(currentState)),
+        phase: currentPhaseIndex
+    }); }
 
     function undo() {
         if (state.length > 1 && !isMoving) {
-            currentState = state.pop();
+            const prevState = state.pop();
+            currentState = prevState.state;
+            currentPhaseIndex = prevState.phase;
             isGameOver = false;
             currentHintStep = Math.max(0, currentHintStep - 1);
             boatEl.classList.remove('broken');
             messageEl.innerHTML = "一手戻しました。";
             messageEl.className = "";
             
-            // 戻したターンの人狼姿を再計算
-            if (stages[stageOrder[currentStageIndex]].hasWeather) {
-                const phase = (currentState.turn - 1) % 4;
-                isWerewolfForm = weatherData[phase].isWerewolf;
+            const stageData = stages[stageOrder[currentStageIndex]];
+            if (stageData.hasWeather) {
+                isWerewolfForm = weatherData[currentPhaseIndex].isWerewolf;
+                appEl.classList.remove('pos-center', 'pos-right', 'pos-left');
+                appEl.classList.add(currentState.boatPosition === 'left' ? 'pos-left' : 'pos-right');
             } else {
                 isWerewolfForm = false;
+                boatEl.className = currentState.boatPosition === 'left' ? 'at-left' : 'at-right';
             }
             
             render();
@@ -762,10 +811,10 @@
             const hasGoat = inBank.some(e => e.id === 'g1');
             const hasCabbage = inBank.some(e => e.id === 'c1');
             
-            // 食物連鎖（人狼は人間Aとヤギを食べる）
+            // 食物連鎖
             if (isWerewolfForm && hasFarmerB) {
                 if (hasFarmerA) return "人狼が人間Aを食べてしまった！🐺🩸👦";
-                if (hasGoat) return "人狼がヤギを食べてしまった！🐺🩸🐐";
+                if (hasWolf) return "人狼がオオカミを食べてしまった！🐺🩸🐺";
             }
 
             const hasGuard = isWerewolfForm ? hasFarmerA : (hasFarmerA || hasFarmerB);
@@ -792,8 +841,8 @@
             isGameOver = true;
             boatEl.classList.add('broken');
         } else {
-            if (currentHintStep > 0 && currentHintStep < stageData.solution.length) {
-                messageEl.innerHTML = `💡 ヒントで進めました（次: ${currentHintStep + 1}手目）`;
+            if (currentHintStep > 0 && currentHintStep <= stageData.solution.length) {
+                messageEl.innerHTML = `💡 ヒントで進めました（現在: ${currentHintStep}手完了）`;
             } else {
                 messageEl.innerHTML = "無事に到着しました。（残り耐久値：" + currentState.durability + "）";
             }
