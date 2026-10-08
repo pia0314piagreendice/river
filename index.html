@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（真・完全論理7手ルート）</title>
+    <title>川渡りパズル 究極版（移動中変身・ロングリバー実装）</title>
     <style>
         :root {
             --wood-color: #8d6e63;
@@ -18,13 +18,13 @@
             touch-action: manipulation;
         }
 
-        /* 画面全体（絶対に潰れない安定レイアウト） */
+        /* 画面崩れや真っ黒を絶対に防ぐ最強の基盤レイアウト */
         html, body {
             width: 100%;
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: #87CEEB; /* 潰れた場合も明るい色でカバー */
+            background-color: #87CEEB; 
         }
 
         body {
@@ -35,15 +35,21 @@
 
         #app-container {
             width: 100%;
-            max-width: 600px;
             height: 100%;
+            max-width: 600px; 
             display: flex;
             flex-direction: column;
             position: relative;
             background-color: #e3f2fd;
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            /* ステージ1・2の基本背景遷移 */
             transition: background-color 0.8s ease;
+        }
+
+        /* ステージ3（ロングリバー）の時は背景もゆっくり4秒で変わる */
+        #app-container.stage3 {
+            transition: background-color 4s linear;
         }
 
         /* 天気フェーズの背景色 */
@@ -51,7 +57,6 @@
         #app-container.weather-day { background-color: #4FC3F7; }
         #app-container.weather-evening { background-color: #FF8A65; }
         #app-container.weather-night { background-color: #2c3e50; color: #fff; }
-        #app-container.weather-fullmoon { background-color: #1a237e; color: #fff; }
 
         header {
             background: rgba(255, 255, 255, 0.95);
@@ -121,14 +126,13 @@
             font-size: 14px;
             flex-shrink: 0;
             z-index: 20;
+            transition: all 0.5s ease;
         }
-        #app-container.weather-fullmoon .status-bar, 
         #app-container.weather-night .status-bar {
             background: rgba(0,0,0,0.7);
             color: #ff8a80;
         }
 
-        /* ゲーム領域 */
         #game-area {
             flex-grow: 1;
             display: flex;
@@ -150,7 +154,17 @@
             padding: 10px 5px;
             position: relative;
             z-index: 2;
+            transition: opacity 0.8s ease-in-out;
         }
+        #app-container.stage3 .bank {
+            transition: opacity 4s linear; /* ステージ3は岸が見えるまで時間がかかる */
+        }
+        
+        .hidden-bank {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
         #left-bank { border-right: 10px solid #795548; }
         #right-bank { border-left: 10px solid #795548; }
 
@@ -181,6 +195,10 @@
             align-items: center;
             transition: left 0.8s ease-in-out;
             z-index: 3;
+        }
+        /* ステージ3の1/5倍速のゆっくりした移動 */
+        #app-container.stage3 #boat {
+            transition: left 4s linear;
         }
 
         #boat.right-side { left: calc(95% - 80px); }
@@ -363,7 +381,6 @@
         <button id="move-boat-btn">🚢 動かす</button>
     </div>
 
-    <!-- クリア演出ウィンドウ -->
     <div id="clear-modal">
         <div class="modal-content">
             <h2 id="modal-title">🎉 クリア！</h2>
@@ -375,7 +392,7 @@
 
 <script>
     // -----------------------------------------------------
-    // パズルのロジック定義（論理破綻を修正した完全な7手）
+    // パズルのロジック定義
     // -----------------------------------------------------
     const stages = {
         classic: {
@@ -399,45 +416,33 @@
                 { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
                 { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
             ],
-            // 双子が協力する流れるような7手
             solution: [ ['f1', 'g1'], ['f1'], ['f1', 'f2'], ['f1'], ['f1', 'w1'], ['f2'], ['f2', 'c1'] ]
         },
         werewolf: {
-            maxMoves: 7, 
+            maxMoves: 3, // 生き物を絞った究極の3手ロジック
             hasWeather: true, 
             entities: [
                 { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
                 { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
-                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
-                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
-                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false }
             ],
-            // 満月(ターン2)を安全にやり過ごす、唯一無二の完璧な7手ルート
             solution: [
-                ['f2', 'c1'], // 1(朝): B+菜 -> 右 (左: A,狼,ヤギ / 右: B,菜)
-                ['f2'],       // 2(満月): B <- 左 (右岸のBが人狼になるがキャベツしかいないので安全！)
-                ['f2', 'w1'], // 3(朝): B+狼 -> 右 (Bが人間に戻ってから合流)
-                ['f2'],       // 4(昼): B <- 左 
-                ['f1', 'f2'], // 5(夕): A+B -> 右 
-                ['f1'],       // 6(夜): A <- 左 
-                ['f1', 'g1']  // 7(朝): A+ヤギ -> 右 （満月を越え、平和な朝にクリア！）
+                ['f1', 'g1'], // 1(夕方->夜): A+ヤギを右へ。到着時に夜になりBが左岸で人狼化するが一人なので安全。
+                ['f1'],       // 2(夜->朝): Aが左へ戻る。到着すると朝になり、Bは人間に戻る！
+                ['f1', 'f2']  // 3(朝->昼): A+Bで右へ。平和な昼に全員到着してクリア！
             ]
         }
     };
 
     const stageOrder = ['classic', 'twins', 'werewolf'];
-    let currentStageIndex = 0; // 0=ステージ1, 1=ステージ2, 2=ステージ3
+    let currentStageIndex = 0;
 
-    // 8ターンの完璧な天気サイクル（ターン2が満月）
+    // ステージ3専用の4フェーズループ（夕方スタート）
     const weatherData = {
-        0: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false }, // ターン1
-        1: { name: '🌕 満月', class: 'weather-fullmoon', icon: '🌕', isWerewolf: true }, // ターン2
-        2: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false }, // ターン3
-        3: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false }, // ターン4
-        4: { name: '🌇 夕方', class: 'weather-evening', icon: '🌇', isWerewolf: false }, // ターン5
-        5: { name: '🌃 夜', class: 'weather-night', icon: '🌙', isWerewolf: false }, // ターン6
-        6: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false }, // ターン7
-        7: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false }  // ターン8 (クリア時)
+        0: { name: '🌇 夕方', class: 'weather-evening', icon: '🌇', isWerewolf: false },
+        1: { name: '🌃 夜', class: 'weather-night', icon: '🌙', isWerewolf: true },
+        2: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false },
+        3: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false }
     };
 
     let entities = [];
@@ -446,6 +451,7 @@
     let isGameOver = false;
     let isMoving = false; 
     let currentHintStep = 0;
+    let isWerewolfForm = false; // 表示用の人狼化フラグ
 
     const appEl = document.getElementById('app-container');
     const leftBankEl = document.getElementById('left-bank');
@@ -461,7 +467,7 @@
     const hintBtn = document.getElementById('hint-btn');
     const clearModal = document.getElementById('clear-modal');
 
-    function initGame() {
+    function initGame(resetHint = true) {
         const currentStageKey = stageOrder[currentStageIndex];
         const stageData = stages[currentStageKey];
         
@@ -478,15 +484,21 @@
         
         isGameOver = false;
         isMoving = false;
-        currentHintStep = 0;
+        isWerewolfForm = false;
+        if (resetHint) currentHintStep = 0;
         
         boatEl.classList.remove('right-side', 'broken');
         clearModal.classList.remove('show');
-        
         messageEl.innerHTML = 'アイコンをタップして乗せ、「動かす」を押してください。';
         messageEl.className = '';
         
         weatherIconEl.style.display = stageData.hasWeather ? 'block' : 'none';
+        
+        if (currentStageKey === 'werewolf') {
+            appEl.classList.add('stage3');
+        } else {
+            appEl.classList.remove('stage3');
+        }
         
         updateButtonStates();
         render();
@@ -502,18 +514,30 @@
 
         const currentStageKey = stageOrder[currentStageIndex];
         const stageData = stages[currentStageKey];
-        let isNight = false;
 
+        // 天気・背景の更新
         if (stageData.hasWeather) {
-            const phase = (currentState.turn - 1) % 8; // 8フェーズでループ
+            const phase = (currentState.turn - 1) % 4;
             const wInfo = weatherData[phase];
-            appEl.className = wInfo.class; 
+            
+            // クラスの付け替え（stage3クラスは維持する）
+            appEl.className = `${wInfo.class} stage3`; 
             weatherIconEl.innerText = wInfo.icon;
-            isNight = wInfo.isWerewolf === true;
-            statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ${wInfo.name}` + (isNight ? ' (人間Bが人狼化!)' : '');
+            statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ${wInfo.name}` + (isWerewolfForm ? ' <span style="color:#ff5252;">(人狼化中!)</span>' : '');
+            
+            // 向こう岸を見えなくする演出
+            if (currentState.boatPosition === 'left') {
+                leftBankEl.classList.remove('hidden-bank');
+                rightBankEl.classList.add('hidden-bank');
+            } else {
+                leftBankEl.classList.add('hidden-bank');
+                rightBankEl.classList.remove('hidden-bank');
+            }
         } else {
             appEl.className = 'weather-day';
             statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ☀️ 昼`;
+            leftBankEl.classList.remove('hidden-bank');
+            rightBankEl.classList.remove('hidden-bank');
         }
 
         entities.forEach(entity => {
@@ -523,7 +547,7 @@
             
             let displayIcon = entity.icon;
             let displayName = entity.name;
-            if (entity.type === 'werewolf_human' && isNight) {
+            if (entity.type === 'werewolf_human' && isWerewolfForm) {
                 displayIcon = '🐺';
                 displayName = '人狼';
                 el.style.color = '#ff5252';
@@ -535,7 +559,7 @@
             el.onclick = (e) => { 
                 e.stopPropagation(); 
                 if (isGameOver || isMoving) return;
-                currentHintStep = 0; // 手動操作が入ったらヒント順序をリセット
+                currentHintStep = 0; 
                 handleCharacterClick(entity.id); 
             };
 
@@ -582,7 +606,23 @@
         
         isMoving = true;
         updateButtonStates();
-        render(); 
+        
+        const currentStageKey = stageOrder[currentStageIndex];
+        const stageData = stages[currentStageKey];
+        const duration = stageData.hasWeather ? 4000 : 800;
+
+        render(); // 出航。背景や岸のCSSアニメーションがスタートする
+
+        // ステージ3：移動の中間地点（2秒後）で姿が変身する演出！
+        if (stageData.hasWeather) {
+            const nextPhase = (currentState.turn - 1) % 4;
+            const willBeNight = weatherData[nextPhase].isWerewolf;
+            
+            setTimeout(() => {
+                isWerewolfForm = willBeNight;
+                render(); // 変身を画面に反映
+            }, duration / 2);
+        }
 
         setTimeout(() => {
             entities.forEach(e => {
@@ -594,7 +634,7 @@
             render(); 
             checkRules();
             updateButtonStates();
-        }, 850);
+        }, duration);
     }
 
     moveBoatBtn.onclick = () => { 
@@ -602,7 +642,6 @@
         performBoatMove(); 
     };
 
-    // ヒント：1回押すごとに確実に1手だけ進み停止する
     hintBtn.onclick = () => {
         if (isMoving || isGameOver) return;
         
@@ -655,6 +694,15 @@
             boatEl.classList.remove('broken');
             messageEl.innerHTML = "一手戻しました。";
             messageEl.className = "";
+            
+            // 戻したターンの人狼姿を再計算
+            if (stages[stageOrder[currentStageIndex]].hasWeather) {
+                const phase = (currentState.turn - 1) % 4;
+                isWerewolfForm = weatherData[phase].isWerewolf;
+            } else {
+                isWerewolfForm = false;
+            }
+            
             render();
             updateButtonStates();
         }
@@ -714,20 +762,13 @@
             const hasGoat = inBank.some(e => e.id === 'g1');
             const hasCabbage = inBank.some(e => e.id === 'c1');
             
-            let isNight = false;
-            if (stageData.hasWeather) {
-                const phase = (currentState.turn - 1) % 8;
-                isNight = weatherData[phase].isWerewolf === true;
-            }
-
-            // 【完全食物連鎖ルール】人狼はキャベツ以外すべて食べる
-            if (isNight && hasFarmerB) {
+            // 食物連鎖（人狼は人間Aとヤギを食べる）
+            if (isWerewolfForm && hasFarmerB) {
                 if (hasFarmerA) return "人狼が人間Aを食べてしまった！🐺🩸👦";
-                if (hasWolf) return "人狼がオオカミを食べてしまった！🐺🩸🐺";
                 if (hasGoat) return "人狼がヤギを食べてしまった！🐺🩸🐐";
             }
 
-            const hasGuard = isNight ? hasFarmerA : (hasFarmerA || hasFarmerB);
+            const hasGuard = isWerewolfForm ? hasFarmerA : (hasFarmerA || hasFarmerB);
 
             if (!hasGuard) {
                 if (hasWolf && hasGoat) return "オオカミがヤギを食べてしまった！🐺 ＞ 🐐";
