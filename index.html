@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>川渡りパズル 究極版（ステージ進行・演出追加版）</title>
+    <title>川渡りパズル 究極版（絶対安定レイアウト・ステージ進行）</title>
     <style>
         :root {
             --wood-color: #8d6e63;
@@ -18,25 +18,33 @@
             touch-action: manipulation;
         }
 
+        /* 画面崩れや真っ黒を絶対に防ぐ最強の基盤レイアウト */
         html, body {
             width: 100%;
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: #222;
+            /* 背景を黒ではなく明るい空色にし、潰れたときの不安感をゼロに */
+            background-color: #87CEEB; 
         }
 
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* アプリ本体のコンテナ（絶対に100%の高さを保持する） */
         #app-container {
             width: 100%;
-            max-width: 600px;
             height: 100%;
-            margin: 0 auto;
+            max-width: 600px; /* PCでは中央にスマホサイズで表示 */
             display: flex;
             flex-direction: column;
             position: relative;
             background-color: #e3f2fd;
             overflow: hidden;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
             transition: background-color 0.8s ease;
         }
 
@@ -47,6 +55,7 @@
         #app-container.weather-night { background-color: #2c3e50; color: #fff; }
         #app-container.weather-fullmoon { background-color: #1a237e; color: #fff; }
 
+        /* ヘッダー・UI（縮まないように固定） */
         header {
             background: rgba(255, 255, 255, 0.95);
             padding: 10px;
@@ -122,7 +131,7 @@
             color: #ff8a80;
         }
 
-        /* ゲーム領域 */
+        /* ゲーム領域（残りの高さをすべて埋める） */
         #game-area {
             flex-grow: 1;
             display: flex;
@@ -143,4 +152,614 @@
             gap: 8px;
             padding: 10px 5px;
             position: relative;
-            z
+            z-index: 2;
+        }
+        #left-bank { border-right: 10px solid #795548; }
+        #right-bank { border-left: 10px solid #795548; }
+
+        #river {
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, rgba(41,182,246,0.8), rgba(129,212,250,0.8), rgba(41,182,246,0.8));
+            background-size: 200% 100%;
+            animation: flowWater 4s infinite linear;
+            position: relative;
+            z-index: 1;
+        }
+        @keyframes flowWater { 100% { background-position: 100% 0; } }
+
+        #boat {
+            position: absolute;
+            left: 5%;
+            top: 50%;
+            margin-top: -75px; 
+            width: 80px;
+            height: 150px;
+            background: repeating-linear-gradient(0deg, var(--wood-color), var(--wood-color) 18px, var(--wood-dark) 20px);
+            border-radius: 8px;
+            box-shadow: 5px 10px 10px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            align-items: center;
+            transition: left 0.8s ease-in-out;
+            z-index: 3;
+        }
+
+        #boat.right-side { left: calc(95% - 80px); }
+        #boat.broken { filter: grayscale(80%) brightness(0.7); transform: rotate(15deg); }
+
+        .boat-slot {
+            width: 60px;
+            height: 60px;
+            border: 3px dashed rgba(255,255,255,0.8);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .character {
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ffffff, #e0e0e0);
+            border: 3px solid #fff;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            transition: transform 0.2s;
+            position: relative;
+            z-index: 10;
+            user-select: none;
+            color: #333;
+        }
+
+        .character:active { transform: scale(0.9) translateY(2px); }
+        
+        .character-name-label {
+            position: absolute;
+            bottom: -16px;
+            font-size: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 2px 4px;
+            border-radius: 4px;
+            white-space: nowrap;
+            line-height: 1;
+        }
+
+        #message-area {
+            padding: 10px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            color: #333;
+            min-height: 60px;
+            font-weight: bold;
+            font-size: 14px;
+            border-top: 1px solid #ddd;
+            flex-shrink: 0;
+            z-index: 20;
+            position: relative;
+        }
+
+        .game-over { color: #d32f2f !important; }
+        .success { color: #2e7d32 !important; }
+
+        .bottom-actions {
+            display: flex;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            border-top: 1px solid #ccc;
+            flex-shrink: 0;
+            z-index: 20;
+            position: relative;
+        }
+
+        .bottom-actions button {
+            padding: 15px 5px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 25px;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+            flex: 1;
+        }
+
+        #hint-btn { background: #ffc107; color: #333; }
+        #move-boat-btn { background: #2196f3; color: white; flex: 2; }
+
+        /* ▼▼▼ クリア演出ウィンドウ（モーダル） ▼▼▼ */
+        #clear-modal {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(3px);
+        }
+        #clear-modal.show { display: flex; }
+        
+        .modal-content {
+            background: #fff;
+            padding: 30px 20px;
+            border-radius: 16px;
+            text-align: center;
+            width: 85%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            color: #333;
+        }
+
+        .modal-content h2 { color: #2e7d32; margin-bottom: 15px; font-size: 24px; }
+        .modal-content p { font-size: 16px; margin-bottom: 25px; font-weight: bold; line-height: 1.5; }
+        
+        #next-stage-btn {
+            background: #ff5722;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        #next-stage-btn:active { transform: scale(0.95); }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="app-container" class="weather-day">
+    <header>
+        <div class="header-top">
+            <div class="durability-box">
+                ⛵ 耐久: <span id="durability-value">7</span>
+            </div>
+            <div id="weather-icon">☀️</div>
+        </div>
+        <div class="header-bottom">
+            <button id="undo-btn" class="top-btn">戻す</button>
+            <button id="reset-stage-btn" class="top-btn">このステージをリセット</button>
+            <button id="reset-all-btn" class="top-btn">ステージ1までリセット</button>
+        </div>
+    </header>
+
+    <div class="status-bar" id="status-bar">
+        ステージ1 | ターン: 1 | ☀️ 昼
+    </div>
+
+    <div id="game-area">
+        <div id="left-bank" class="bank"></div>
+        <div id="river">
+            <div id="boat">
+                <div class="boat-slot" id="slot-0"></div>
+                <div class="boat-slot" id="slot-1"></div>
+            </div>
+        </div>
+        <div id="right-bank" class="bank"></div>
+    </div>
+
+    <div id="message-area">
+        アイコンをタップして乗せ、「動かす」を押してください。
+    </div>
+
+    <div class="bottom-actions">
+        <button id="hint-btn">💡 1手ヒント</button>
+        <button id="move-boat-btn">🚢 動かす</button>
+    </div>
+
+    <!-- クリア時の演出ウィンドウ -->
+    <div id="clear-modal">
+        <div class="modal-content">
+            <h2 id="modal-title">🎉 クリア！</h2>
+            <p id="modal-message">ステージを見事クリアしました！</p>
+            <button id="next-stage-btn">次のステージへ</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // -----------------------------------------------------
+    // パズルのロジック定義（全て完璧に検証済みの最適解）
+    // -----------------------------------------------------
+    const stages = {
+        classic: {
+            maxMoves: 7,
+            hasWeather: false,
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間', icon: '👦', canDrive: true },
+                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ],
+            solution: [ ['f1', 'g1'], ['f1'], ['f1', 'w1'], ['f1', 'g1'], ['f1', 'c1'], ['f1'], ['f1', 'g1'] ]
+        },
+        twins: {
+            maxMoves: 7,
+            hasWeather: false,
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
+                { id: 'f2', type: 'farmer', name: '人間B', icon: '👱‍♂️', canDrive: true },
+                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ],
+            solution: [ ['f1', 'g1'], ['f1'], ['f1', 'f2'], ['f1'], ['f1', 'w1'], ['f2'], ['f2', 'c1'] ]
+        },
+        werewolf: {
+            maxMoves: 9, 
+            hasWeather: true, 
+            entities: [
+                { id: 'f1', type: 'farmer', name: '人間A', icon: '👦', canDrive: true },
+                { id: 'f2', type: 'werewolf_human', name: '人間B', icon: '👱‍♂️', canDrive: true },
+                { id: 'w1', type: 'wolf', name: 'オオカミ', icon: '🐺', canDrive: false },
+                { id: 'g1', type: 'goat', name: 'ヤギ', icon: '🐐', canDrive: false },
+                { id: 'c1', type: 'cabbage', name: 'キャベツ', icon: '🥬', canDrive: false }
+            ],
+            solution: [
+                ['f2', 'g1'], ['f2'], ['f1', 'f2'], ['f1', 'g1'], ['f1', 'g1'], ['f1'], ['f1', 'w1'], ['f2'], ['f2', 'c1']
+            ]
+        }
+    };
+
+    const stageOrder = ['classic', 'twins', 'werewolf'];
+    let currentStageIndex = 0; // 0=ステージ1, 1=ステージ2, 2=ステージ3
+
+    const weatherData = {
+        0: { name: '🌅 朝', class: 'weather-morning', icon: '🌅', isWerewolf: false },
+        1: { name: '☀️ 昼', class: 'weather-day', icon: '☀️', isWerewolf: false },
+        2: { name: '🌇 夕方', class: 'weather-evening', icon: '🌇', isWerewolf: false },
+        3: { name: '🌃 夜', class: 'weather-night', icon: '🌙', isWerewolf: false },
+        4: { name: '🌕 満月', class: 'weather-fullmoon', icon: '🌕', isWerewolf: true }
+    };
+
+    let entities = [];
+    let state = []; 
+    let currentState = {};
+    let isGameOver = false;
+    let isMoving = false; 
+    let currentHintStep = 0;
+
+    const appEl = document.getElementById('app-container');
+    const leftBankEl = document.getElementById('left-bank');
+    const rightBankEl = document.getElementById('right-bank');
+    const boatEl = document.getElementById('boat');
+    const boatSlotsEl = [document.getElementById('slot-0'), document.getElementById('slot-1')];
+    const messageEl = document.getElementById('message-area');
+    const statusBarEl = document.getElementById('status-bar');
+    const durabilityEl = document.getElementById('durability-value');
+    const weatherIconEl = document.getElementById('weather-icon');
+    const undoBtn = document.getElementById('undo-btn');
+    const moveBoatBtn = document.getElementById('move-boat-btn');
+    const hintBtn = document.getElementById('hint-btn');
+    const clearModal = document.getElementById('clear-modal');
+
+    function initGame() {
+        const currentStageKey = stageOrder[currentStageIndex];
+        const stageData = stages[currentStageKey];
+        
+        entities = JSON.parse(JSON.stringify(stageData.entities));
+        
+        currentState = {
+            turn: 1,
+            durability: stageData.maxMoves,
+            boatPosition: 'left',
+            positions: {}
+        };
+        entities.forEach(e => { currentState.positions[e.id] = 'left'; });
+        state = [JSON.parse(JSON.stringify(currentState))];
+        
+        isGameOver = false;
+        isMoving = false;
+        currentHintStep = 0;
+        
+        boatEl.classList.remove('right-side', 'broken');
+        clearModal.classList.remove('show');
+        
+        messageEl.innerHTML = 'アイコンをタップして乗せ、「動かす」を押してください。';
+        messageEl.className = '';
+        
+        weatherIconEl.style.display = stageData.hasWeather ? 'block' : 'none';
+        
+        updateButtonStates();
+        render();
+    }
+
+    function render() {
+        leftBankEl.innerHTML = '';
+        rightBankEl.innerHTML = '';
+        boatSlotsEl[0].innerHTML = '';
+        boatSlotsEl[1].innerHTML = '';
+
+        durabilityEl.innerText = currentState.durability;
+
+        const currentStageKey = stageOrder[currentStageIndex];
+        const stageData = stages[currentStageKey];
+        let isNight = false;
+
+        if (stageData.hasWeather) {
+            const phase = (currentState.turn - 1) % 5;
+            const wInfo = weatherData[phase];
+            appEl.className = wInfo.class; 
+            weatherIconEl.innerText = wInfo.icon;
+            isNight = wInfo.isWerewolf === true;
+            statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ${wInfo.name}` + (isNight ? ' (人間Bが人狼化!)' : '');
+        } else {
+            appEl.className = 'weather-day';
+            statusBarEl.innerHTML = `ステージ${currentStageIndex + 1} | ターン: ${currentState.turn} | ☀️ 昼`;
+        }
+
+        entities.forEach(entity => {
+            const el = document.createElement('div');
+            el.className = 'character';
+            el.id = entity.id;
+            
+            let displayIcon = entity.icon;
+            let displayName = entity.name;
+            if (entity.type === 'werewolf_human' && isNight) {
+                displayIcon = '🐺';
+                displayName = '人狼';
+                el.style.color = '#ff5252';
+                el.style.borderColor = '#ff5252';
+            }
+            
+            el.innerHTML = `${displayIcon}<div class="character-name-label">${displayName}</div>`;
+            
+            el.onclick = (e) => { 
+                e.stopPropagation(); 
+                if (isGameOver || isMoving) return;
+                currentHintStep = 0; 
+                handleCharacterClick(entity.id); 
+            };
+
+            const pos = currentState.positions[entity.id];
+            if (pos === 'left') leftBankEl.appendChild(el);
+            else if (pos === 'right') rightBankEl.appendChild(el);
+            else if (pos === 'boat_0') boatSlotsEl[0].appendChild(el);
+            else if (pos === 'boat_1') boatSlotsEl[1].appendChild(el);
+        });
+
+        if (currentState.boatPosition === 'right') boatEl.classList.add('right-side');
+        else boatEl.classList.remove('right-side');
+    }
+
+    function handleCharacterClick(id) {
+        if (isGameOver || isMoving) return;
+        const pos = currentState.positions[id];
+        
+        if (pos.startsWith('boat')) {
+            currentState.positions[id] = currentState.boatPosition; 
+        } else if (pos === currentState.boatPosition) {
+            const values = Object.values(currentState.positions);
+            if (!values.includes('boat_0')) currentState.positions[id] = 'boat_0';
+            else if (!values.includes('boat_1')) currentState.positions[id] = 'boat_1';
+        }
+        render();
+    }
+
+    function performBoatMove() {
+        if (isGameOver || isMoving) return;
+
+        const onBoat = entities.filter(e => currentState.positions[e.id].startsWith('boat'));
+        const hasDriver = onBoat.some(e => e.canDrive);
+        
+        if (!hasDriver) {
+            showMessage("船を動かすには人間(または人狼)が必要です！", "game-over");
+            return;
+        }
+
+        saveState();
+        currentState.boatPosition = (currentState.boatPosition === 'left') ? 'right' : 'left';
+        currentState.turn++;
+        currentState.durability--;
+        
+        isMoving = true;
+        updateButtonStates();
+        render(); 
+
+        setTimeout(() => {
+            entities.forEach(e => {
+                if (currentState.positions[e.id].startsWith('boat')) {
+                    currentState.positions[e.id] = currentState.boatPosition; 
+                }
+            });
+            isMoving = false; 
+            render(); 
+            checkRules();
+            updateButtonStates();
+        }, 850);
+    }
+
+    moveBoatBtn.onclick = () => { 
+        currentHintStep = 0; 
+        performBoatMove(); 
+    };
+
+    hintBtn.onclick = () => {
+        if (isMoving || isGameOver) return;
+        
+        const currentStageKey = stageOrder[currentStageIndex];
+        const solution = stages[currentStageKey].solution;
+        
+        if (currentHintStep >= solution.length || (currentHintStep === 0 && currentState.turn > 1)) {
+            initGame(); 
+            messageEl.innerHTML = "💡 ヒント機能：最初からリセットしました。もう一度押すと1手進みます。";
+            return;
+        }
+        
+        const move = solution[currentHintStep];
+        
+        entities.forEach(e => {
+            if (currentState.positions[e.id].startsWith('boat')) {
+                currentState.positions[e.id] = currentState.boatPosition;
+            }
+        });
+
+        move.forEach((id, index) => {
+            currentState.positions[id] = `boat_${index}`;
+        });
+        
+        render();
+        isMoving = true; 
+        updateButtonStates();
+        
+        setTimeout(() => {
+            isMoving = false;
+            performBoatMove();
+            currentHintStep++;
+        }, 600);
+    };
+
+    function updateButtonStates() {
+        const disable = isMoving || isGameOver;
+        undoBtn.disabled = disable;
+        moveBoatBtn.disabled = disable;
+        hintBtn.disabled = isMoving; 
+    }
+
+    function saveState() { state.push(JSON.parse(JSON.stringify(currentState))); }
+
+    function undo() {
+        if (state.length > 1 && !isMoving) {
+            currentState = state.pop();
+            isGameOver = false;
+            currentHintStep = Math.max(0, currentHintStep - 1);
+            boatEl.classList.remove('broken');
+            messageEl.innerHTML = "一手戻しました。";
+            messageEl.className = "";
+            render();
+            updateButtonStates();
+        }
+    }
+
+    function checkRules() {
+        const currentStageKey = stageOrder[currentStageIndex];
+        const stageData = stages[currentStageKey];
+        const allRight = entities.every(e => currentState.positions[e.id] === 'right');
+        
+        if (allRight) {
+            isGameOver = true;
+            
+            setTimeout(() => {
+                const title = document.getElementById('modal-title');
+                const msg = document.getElementById('modal-message');
+                const nextBtn = document.getElementById('next-stage-btn');
+                
+                clearModal.classList.add('show');
+                
+                if (currentState.durability < 0) {
+                    title.innerText = "🎉 劇的クリア！";
+                    msg.innerHTML = "イカダは沈没しましたが、<br>ギリギリで全員渡りきりました！";
+                } else {
+                    title.innerText = "🎉 クリア！";
+                    msg.innerHTML = `ステージ${currentStageIndex + 1}を見事クリアしました！`;
+                }
+                
+                if (currentStageIndex < stageOrder.length - 1) {
+                    nextBtn.innerText = "次のステージへ";
+                    nextBtn.onclick = () => {
+                        currentStageIndex++;
+                        initGame();
+                    };
+                } else {
+                    title.innerText = "🏆 完全制覇！";
+                    msg.innerHTML = "おめでとうございます！<br>全てのステージをクリアしました！";
+                    nextBtn.innerText = "最初から遊ぶ";
+                    nextBtn.onclick = () => {
+                        currentStageIndex = 0;
+                        initGame();
+                    };
+                }
+            }, 600);
+            return;
+        }
+
+        const checkBank = (bankName) => {
+            const inBank = entities.filter(e => {
+                const p = currentState.positions[e.id];
+                return p === bankName || (currentState.boatPosition === bankName && p.startsWith('boat'));
+            });
+            
+            const hasFarmerA = inBank.some(e => e.id === 'f1');
+            const hasFarmerB = inBank.some(e => e.id === 'f2');
+            const hasWolf = inBank.some(e => e.id === 'w1');
+            const hasGoat = inBank.some(e => e.id === 'g1');
+            const hasCabbage = inBank.some(e => e.id === 'c1');
+            
+            let isNight = false;
+            if (stageData.hasWeather) {
+                const phase = (currentState.turn - 1) % 5;
+                isNight = weatherData[phase].isWerewolf === true;
+            }
+
+            if (isNight && hasFarmerB) {
+                if (hasFarmerA) return "人狼が人間Aを食べてしまった！🐺🩸👦";
+                if (hasWolf) return "人狼がオオカミを食べてしまった！🐺🩸🐺";
+            }
+
+            const hasGuard = isNight ? hasFarmerA : (hasFarmerA || hasFarmerB);
+
+            if (!hasGuard) {
+                if (hasWolf && hasGoat) return "オオカミがヤギを食べてしまった！🐺 ＞ 🐐";
+                if (hasGoat && hasCabbage) return "ヤギがキャベツを食べてしまった！🐐 ＞ 🥬";
+            }
+            return null;
+        };
+
+        const leftError = checkBank('left');
+        const rightError = checkBank('right');
+
+        if (leftError || rightError) {
+            showMessage(`💀 ゲームオーバー！<br>${leftError || rightError}`, "game-over");
+            isGameOver = true;
+            if (currentState.durability < 0) boatEl.classList.add('broken');
+            return;
+        }
+
+        if (currentState.durability < 0) {
+            showMessage("💥 耐久値が尽きて沈没した！ゲームオーバー！", "game-over");
+            isGameOver = true;
+            boatEl.classList.add('broken');
+        } else {
+            if (currentHintStep > 0 && currentHintStep < stageData.solution.length) {
+                messageEl.innerHTML = `💡 ヒントで進めました（次: ${currentHintStep + 1}手目）`;
+            } else {
+                messageEl.innerHTML = "無事に到着しました。（残り耐久値：" + currentState.durability + "）";
+            }
+            messageEl.className = "";
+        }
+    }
+
+    function showMessage(msg, className) {
+        messageEl.innerHTML = msg;
+        messageEl.className = className;
+    }
+
+    document.getElementById('reset-stage-btn').addEventListener('click', initGame);
+    document.getElementById('reset-all-btn').addEventListener('click', () => {
+        currentStageIndex = 0;
+        initGame();
+    });
+    document.getElementById('undo-btn').addEventListener('click', undo);
+
+    initGame();
+</script>
+</body>
+</html>
